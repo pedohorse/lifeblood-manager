@@ -1,6 +1,7 @@
 use crate::widgets::Widget;
 use crate::InstallationsData;
 use crate::theme::*;
+use fltk::dialog;
 use fltk::{
     app,
     button::Button,
@@ -110,6 +111,7 @@ impl Widget for InstallationWidget {
         installations_table.set_row_resize(true);
         installations_table.set_col_width(0, 64);
         installations_table.set_col_width(1, 300);
+        installations_table.set_col_width(2, 150);
 
         installations_table.end();
 
@@ -178,96 +180,107 @@ impl Widget for InstallationWidget {
             .lock()
             .unwrap()
             .installation_table
-            .draw_cell(move |t, ctx, row, col, x, y, w, h| match ctx {
-                TableContext::Cell => {
-                    draw::push_clip(x, y, w, h);
-                    draw::draw_box(
-                        enums::FrameType::ThinDownBox,
-                        x,
-                        y,
-                        w,
-                        h,
-                        if t.is_selected(row, col) {
-                            CELL_BG_SEL_COLOR
-                        } else {
-                            match &widget_to_cb.try_lock() {
-                                Ok(guard) => match guard.install_data {
-                                    Some(ref data)
-                                        if data.current_version_index() == row as usize =>
-                                    {
-                                        CELL_BG_CUR_COLOR
-                                    }
-                                    _ => CELL_BG_COLOR,
-                                },
-                                _ => CELL_BG_COLOR,
-                            }
-                        },
-                    );
-                    draw::set_draw_color(CELL_FG_COLOR);
-                    match &widget_to_cb.try_lock() {
-                        Ok(guard) => {
-                            if let Some(ref data) = guard.install_data {
-                                match data.version(row as usize) {
-                                    Some(ver) => match col {
-                                        0 => {
-                                            if row as usize == data.current_version_index() {
-                                                draw::draw_text2(
-                                                    "current",
-                                                    x,
-                                                    y,
-                                                    w,
-                                                    h,
-                                                    enums::Align::Center,
-                                                );
-                                            }
+            .draw_cell(move |t, ctx, row, col, x, y, w, h| {
+                let ver_id = (t.rows()-1 - row) as usize;
+                match ctx {
+                    TableContext::Cell => {
+                        draw::push_clip(x, y, w, h);
+                        draw::draw_box(
+                            enums::FrameType::ThinDownBox,
+                            x,
+                            y,
+                            w,
+                            h,
+                            if t.is_selected(row, col) {
+                                CELL_BG_SEL_COLOR
+                            } else {
+                                match &widget_to_cb.try_lock() {
+                                    Ok(guard) => match guard.install_data {
+                                        Some(ref data)
+                                            if data.current_version_index() == ver_id =>
+                                        {
+                                            CELL_BG_CUR_COLOR
                                         }
-                                        1 => draw::draw_text2(
-                                            ver.source_commit(),
-                                            x,
-                                            y,
-                                            w,
-                                            h,
-                                            enums::Align::Center,
-                                        ),
-                                        _ => draw::draw_text2(
-                                            "<ERROR>",
-                                            x,
-                                            y,
-                                            w,
-                                            h,
-                                            enums::Align::Center,
-                                        ),
+                                        _ => CELL_BG_COLOR,
                                     },
-                                    None => {
-                                        draw::draw_text2(
-                                            "<ERROR>",
-                                            x,
-                                            y,
-                                            w,
-                                            h,
-                                            enums::Align::Center,
-                                        );
+                                    _ => CELL_BG_COLOR,
+                                }
+                            },
+                        );
+                        draw::set_draw_color(CELL_FG_COLOR);
+                        match &widget_to_cb.try_lock() {
+                            Ok(guard) => {
+                                if let Some(ref data) = guard.install_data {
+                                    match data.version(ver_id) {
+                                        Some(ver) => match col {
+                                            0 => {
+                                                if ver_id == data.current_version_index() {
+                                                    draw::draw_text2(
+                                                        "current",
+                                                        x,
+                                                        y,
+                                                        w,
+                                                        h,
+                                                        enums::Align::Center,
+                                                    );
+                                                }
+                                            }
+                                            1 => draw::draw_text2(
+                                                ver.source_commit(),
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            ),
+                                            2 => draw::draw_text2(
+                                                &ver.date().format("%d-%m-%Y %H:%M:%S").to_string(),
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            ),
+                                            _ => draw::draw_text2(
+                                                "<ERROR>",
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            ),
+                                        },
+                                        None => {
+                                            draw::draw_text2(
+                                                "<ERROR>",
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            );
+                                        }
                                     }
                                 }
                             }
+                            Err(TryLockError::WouldBlock) => {
+                                draw::draw_text2(
+                                    "<data update in progress>",
+                                    x,
+                                    y,
+                                    w,
+                                    h,
+                                    enums::Align::Center,
+                                );
+                            }
+                            _ => {
+                                draw::draw_text2("<ALL BROKEN!>", x, y, w, h, enums::Align::Center);
+                            }
                         }
-                        Err(TryLockError::WouldBlock) => {
-                            draw::draw_text2(
-                                "<data update in progress>",
-                                x,
-                                y,
-                                w,
-                                h,
-                                enums::Align::Center,
-                            );
-                        }
-                        _ => {
-                            draw::draw_text2("<ALL BROKEN!>", x, y, w, h, enums::Align::Center);
-                        }
+                        draw::pop_clip();
                     }
-                    draw::pop_clip();
+                    _ => (),
                 }
-                _ => (),
             });
 
         // set current button callback
@@ -279,10 +292,11 @@ impl Widget for InstallationWidget {
             if row < 0 {
                 return;
             }
+            let ver_id = (guard.installation_table.rows()-1 - row) as usize;
             match guard.install_data {
                 Some(ref mut data) => {
-                    data.make_version_current(row as usize).unwrap_or_else(|e| {
-                        eprintln!("failed to set current version to {}, cuz: {}", row, e);
+                    data.make_version_current(ver_id).unwrap_or_else(|e| {
+                        eprintln!("failed to set current version to {}, cuz: {}", ver_id, e);
                     });
                 }
                 _ => (),
@@ -305,13 +319,17 @@ impl Widget for InstallationWidget {
                                     idx
                                 }
                                 Err(e) => {
-                                    eprintln!("failed to install new version: {}", e);
+                                    let err_msg = format!("failed to install new version: {}", e);
+                                    dialog::alert_default(&err_msg);
+                                    eprintln!("{}", err_msg);
                                     return;
                                 }
                             };
                             // make current
                             if let Err(e) = data.make_version_current(new_ver) {
-                                eprintln!("failed to make new version current: {}", e);
+                                let err_msg = format!("failed to make new version current: {}", e);
+                                dialog::alert_default(&err_msg);
+                                eprintln!("{}", err_msg);
                             }
                         }
                         _ => (),

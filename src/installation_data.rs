@@ -96,6 +96,10 @@ impl InstalledVersion {
     pub fn source_commit(&self) -> &str {
         &self.commit
     }
+
+    pub fn date(&self) -> &DateTime<Utc> {
+        &self.date
+    }
 }
 
 impl InstallationsData {
