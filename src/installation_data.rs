@@ -28,6 +28,7 @@ pub struct InstallationsData {
     base_path: PathBuf,
     versions: Vec<InstalledVersion>,
     current_version: usize,
+    base_path_tainted: bool, // true if there is garbage unrelated to lifeblood found in the base_path
 }
 
 macro_rules! check_status {
@@ -49,6 +50,9 @@ macro_rules! check_status {
 }
 
 impl InstalledVersion {
+    ///
+    /// given path construct a version object that is contained in it
+    /// or error if given path is not a valid version
     pub fn from_path(path: PathBuf) -> Result<InstalledVersion, Error> {
         if !path.is_dir() {
             return Err(Error::new(
@@ -65,6 +69,29 @@ impl InstalledVersion {
                 ))
             }
         };
+        // check for must-haves
+        let mut has_venv = false;
+        let mut has_lifeblood = false;
+        let mut has_entrypy = false;
+        if let Ok(pathdir) = path.read_dir() {
+            for sub in pathdir {
+                let subentry = match sub {
+                    Ok(x) => x,
+                    Err(_) => continue,
+                };
+                has_venv = has_venv || subentry.file_name() == "venv";
+                has_lifeblood = has_lifeblood || subentry.file_name() == "lifeblood";
+                has_entrypy = has_entrypy || subentry.file_name() == "entry.py";
+            }
+        }
+        if !has_venv || !has_lifeblood || !has_entrypy {
+            // then this is probably not an install dir
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "given dir's structure does not resemble one of an installed version",
+            ));
+        }
+
         // try read metadata
         let date = match helper_read_metadata(&path.join("meta.info")) {
             Ok((hash, date)) => {
@@ -109,6 +136,7 @@ impl InstallationsData {
         let mut versions = Vec::new();
         let mut current_version = usize::MAX;
         let mut current_path = PathBuf::new();
+        let mut base_path_tainted = false;
 
         match fs::read_dir(&base_path) {
             Ok(dir_iter) => {
@@ -117,6 +145,7 @@ impl InstallationsData {
                         Ok(x) => x,
                         Err(e) => {
                             println!("skipping failed dir entry: {}", e);
+                            base_path_tainted = true;
                             continue;
                         }
                     };
@@ -142,6 +171,7 @@ impl InstallationsData {
                                     }
                                 }
                                 Err(_) => {
+                                    base_path_tainted = true;
                                     eprintln!(
                                         "thought {:?} is a link, but cannot read it, skipping",
                                         path
@@ -160,6 +190,7 @@ impl InstallationsData {
                             }
                         },
                         path => {
+                            base_path_tainted = true;
                             println!("skipping {:?}", path);
                             continue;
                         }
@@ -181,7 +212,13 @@ impl InstallationsData {
             base_path,
             versions,
             current_version,
+            base_path_tainted,
         })
+    }
+
+    /// true if non-lifeblood related crap is detected in the given base_path
+    pub fn is_base_path_tainted(&self) -> bool {
+        self.base_path_tainted
     }
 
     pub fn version(&self, i: usize) -> Option<&InstalledVersion> {
