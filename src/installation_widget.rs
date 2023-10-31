@@ -2,6 +2,7 @@ use crate::widgets::Widget;
 use crate::InstallationsData;
 use crate::theme::*;
 use fltk::dialog;
+use fltk::enums::LabelType;
 use fltk::{
     app,
     button::Button,
@@ -46,6 +47,7 @@ pub struct InstallationWidget {
     install_data: Option<InstallationsData>,
     base_path_input: FileInput,
     installation_table: Table,
+    warning_label: Frame,
 }
 
 impl InstallationWidget {
@@ -60,6 +62,14 @@ impl InstallationWidget {
 
         // update input
         self.base_path_input.set_value(&new_path.to_string_lossy());
+
+        if new_data.is_base_path_tainted() {
+            self.warning_label.set_label(
+                "Warning: given path contains elements unrelated to lifeblood.\n\
+                       It's recommended to choose an empty directory for lifeblood installations") 
+        } else {
+            self.warning_label.set_label("");
+        }
 
         self.install_data = Some(new_data);
 
@@ -101,6 +111,9 @@ impl Widget for InstallationWidget {
         let (mut browse_button, base_input, base_input_flex) = Self::init_base_path_input();
         flex.fixed(&base_input_flex, ITEM_HEIGHT);
 
+        let path_warning_label = Frame::default().with_label("");
+        flex.fixed(&path_warning_label, ITEM_HEIGHT);
+
         tab_header.resizable(&tab_header);
 
         let mut installations_table = Table::default().with_size(200, 200);
@@ -132,6 +145,7 @@ impl Widget for InstallationWidget {
             install_data: None,
             base_path_input: base_input,
             installation_table: installations_table,
+            warning_label: path_warning_label,
         };
 
         let widget = Arc::new(Mutex::new(widget));
