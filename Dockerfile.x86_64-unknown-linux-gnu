@@ -1,0 +1,10 @@
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update
+RUN apt-get install --assume-yes --no-install-recommends \
+    libx11-dev libxext-dev libxft-dev \
+    libxinerama-dev libxcursor-dev \
+    libxrender-dev  libxfixes-dev  libgl1-mesa-dev \
+    libglu1-mesa-dev libasound2-dev libpango1.0-dev \
+    libssl-dev
