@@ -1,12 +1,22 @@
 [package]
-name = "lifeblood-installer"
+name = "lifeblood-manager"
 version = "0.1.0"
 edition = "2021"
+
+[features]
+ui = ["dep:fltk"]
+
+[[bin]]
+name = "lifeblood-manager"
+required-features = ["ui"]
+
+[[bin]]
+name = "lifeblood-manager-cli"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fltk = { version = "1.4", features = ["fltk-bundled"] }
+fltk = { version = "1.4", features = ["fltk-bundled"], optional=true}
 downloader = "0.2.7"
 rand = "0.8.5"
 zip = "0.6.6"

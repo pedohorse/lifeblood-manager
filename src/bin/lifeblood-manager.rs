@@ -1,5 +1,5 @@
 use fltk::{app, group::Tabs, prelude::*, window::Window};
-use lifeblood_installer::{InstallationWidget, Widget, theme::*};
+use lifeblood_manager::{InstallationWidget, Widget, theme::*};
 use std::env::current_dir;
 
 fn main() {

@@ -1,5 +1,4 @@
 use chrono::prelude::*;
-use fs_extra::file;
 use std::fs;
 use std::fs::File;
 use std::io::{prelude::*, BufWriter};
@@ -7,7 +6,7 @@ use std::io::{BufReader, Error};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{self, ExitStatus};
+use std::process;
 
 use downloader::{Download, Downloader};
 
@@ -138,6 +137,13 @@ impl InstallationsData {
         let mut current_path = PathBuf::new();
         let mut base_path_tainted = false;
 
+        let base_path = if let Ok(x) = fs::canonicalize(base_path) { x } else {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bad base path"
+            ))
+        };
+
         match fs::read_dir(&base_path) {
             Ok(dir_iter) => {
                 for entry in dir_iter {
@@ -216,6 +222,10 @@ impl InstallationsData {
         })
     }
 
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
+    }
+
     /// true if non-lifeblood related crap is detected in the given base_path
     pub fn is_base_path_tainted(&self) -> bool {
         self.base_path_tainted
@@ -241,7 +251,7 @@ impl InstallationsData {
         self.current_version
     }
 
-    pub fn iter_versions(&self) -> impl Iterator<Item = &InstalledVersion> + '_ {
+    pub fn iter_versions(&self) -> impl DoubleEndedIterator<Item = &InstalledVersion> + ExactSizeIterator + '_ {
         self.versions.iter()
     }
 
@@ -409,6 +419,12 @@ impl InstallationsData {
         if self.current_version != usize::MAX && inserted_index <= self.current_version {
             self.current_version += 1;
         }
+        //
+
+        // last sanity check
+        if !self.base_path.join("current").exists() {
+            wraperr!("create 'current' link", self.make_version_current(inserted_index));
+        }
 
         Ok(inserted_index)
     }
@@ -441,7 +457,7 @@ impl InstallationsData {
                 // nothing to cleanup
                 return Err(Error::new(
                     std::io::ErrorKind::Other,
-                    "could not initialize downloader :(",
+                    format!("could not initialize downloader :( {}", e),
                 ));
             }
         };
@@ -811,7 +827,11 @@ impl InstallationsData {
                 }
             }
         }
-
+        println!("{}", dest_dir.exists());
+        println!("{}", dest_dir.join("venv").exists());
+        println!("{}", dest_dir.join("venv").join("bin").exists());
+        println!("{}", dest_dir.join("venv").join("bin").join("python").exists());
+        println!("{:?}", dest_dir.join("venv").join("bin").join("python"));
         // run pip
         let exit_status =
             match process::Command::new(dest_dir.join("venv").join("bin").join("python"))
