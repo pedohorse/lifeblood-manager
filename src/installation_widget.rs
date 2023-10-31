@@ -48,6 +48,7 @@ pub struct InstallationWidget {
     base_path_input: FileInput,
     installation_table: Table,
     warning_label: Frame,
+    main_flex: Flex
 }
 
 impl InstallationWidget {
@@ -66,10 +67,13 @@ impl InstallationWidget {
         if new_data.is_base_path_tainted() {
             self.warning_label.set_label(
                 "Warning: given path contains elements unrelated to lifeblood.\n\
-                       It's recommended to choose an empty directory for lifeblood installations") 
+                       It's recommended to choose an empty directory for lifeblood installations");
+            self.main_flex.fixed(&self.warning_label, ITEM_HEIGHT*2);
         } else {
             self.warning_label.set_label("");
+            self.main_flex.fixed(&self.warning_label, 1);
         }
+
 
         self.install_data = Some(new_data);
 
@@ -141,11 +145,12 @@ impl Widget for InstallationWidget {
         flex.end();
         tab_header.end();
 
-        let mut widget = InstallationWidget {
+        let widget = InstallationWidget {
             install_data: None,
             base_path_input: base_input,
             installation_table: installations_table,
             warning_label: path_warning_label,
+            main_flex: flex,
         };
 
         let widget = Arc::new(Mutex::new(widget));
@@ -334,20 +339,18 @@ impl Widget for InstallationWidget {
                                 }
                                 Err(e) => {
                                     let err_msg = format!("failed to install new version: {}", e);
-                                    dialog::alert_default(&err_msg);
-                                    eprintln!("{}", err_msg);
-                                    return;
+                                    return Err(err_msg);
                                 }
                             };
                             // make current
                             if let Err(e) = data.make_version_current(new_ver) {
                                 let err_msg = format!("failed to make new version current: {}", e);
-                                dialog::alert_default(&err_msg);
-                                eprintln!("{}", err_msg);
+                                eprintln!("Warning: {}", err_msg);
                             }
                         }
                         _ => (),
                     }
+                    Ok(())
                 });
 
                 let btn_text = btn.label();
@@ -363,8 +366,20 @@ impl Widget for InstallationWidget {
                 btn.set_label(&btn_text);
 
                 // join
-                if let Err(e) = handle.join() {
-                    eprintln!("thead join failed! {:?}", e);
+                match handle.join() {
+                    Ok(Err(err_msg)) => {
+                        eprintln!("{}", err_msg);
+                        let wind = btn.window().unwrap();
+                        dialog::alert(
+                            wind.x() + (wind.w()/2) as i32 - 300,
+                            wind.y() + (wind.h()/2) as i32 - 100,
+                            &err_msg
+                        );
+                    }
+                    Err(e) =>  {
+                        eprintln!("thead join failed! {:?}", e);
+                    }
+                    _ => ()
                 }
             });
 
