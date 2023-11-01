@@ -7,6 +7,7 @@ use std::io::{BufReader, Error};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::thread::current;
 
 use downloader::{Download, Downloader};
 
@@ -14,6 +15,11 @@ use fs_extra::dir::CopyOptions;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use zip::ZipArchive;
+
+#[cfg(unix)]
+const VENV_BIN: &str = "bin";
+#[cfg(windows)]
+const VENV_BIN: &str = "Scripts";
 
 #[derive(Debug)]
 pub struct InstalledVersion {
@@ -199,6 +205,18 @@ impl InstallationsData {
                                 continue;
                             }
                         },
+                        #[cfg(windows)]
+                        path if path.ends_with("lifeblood.cmd") => {
+                            let contents = fs::read_to_string(&path)?;
+                            match contents.lines().next() {
+                                Some(line) => {
+                                    current_path = base_path.join(&line[5..].trim());  // first 4 symbols are expected to be "@rem "
+                                }
+                                None => {
+                                    eprintln!("malformed lifeblood.cmd, recreate it");
+                                }
+                            };
+                        }
                         path => {
                             base_path_tainted = true;
                             println!("skipping {:?}", path);
@@ -264,8 +282,23 @@ impl InstallationsData {
     }
 
     pub fn make_version_current(&mut self, i: usize) -> Result<(), Error> {
+        #[cfg(unix)]
+        return self.make_version_current_unix(i);
+        #[cfg(windows)]
+        return self.make_version_current_win(i, false);
+    }
+
+    #[cfg(unix)]
+    pub fn make_version_current_unix(&mut self, i: usize) -> Result<(), Error> {
         match self.versions.get(i) {
             Some(ver) => {
+                // try to get a relpath
+                let path_to_ver = if let Ok(path) = ver.path.strip_prefix(&self.base_path) {
+                    path
+                } else {
+                    &ver.path
+                };
+
                 let path_to_current = self.base_path.join("current");
                 if path_to_current.is_symlink() || path_to_current.exists() {
                     if let Err(e) = fs::remove_file(&path_to_current) {
@@ -275,22 +308,33 @@ impl InstallationsData {
                         ));
                     }
                 }
-                // try to get a relpath
+                if let Err(e) = std::os::unix::fs::symlink(path_to_ver, &path_to_current) {
+                    // TODO: restore prev current
+                    return Err(e);
+                }
+
+                self.current_version = i;
+                Ok(())
+            }
+            None => Err(Error::new(std::io::ErrorKind::NotFound, "no such version")),
+        }
+    }
+
+    //#[cfg(windows)]
+    pub fn make_version_current_win(&mut self, i: usize, do_viewer: bool) -> Result<(), Error> {
+        match self.versions.get(i) {
+            Some(ver) => {
                 let path_to_ver = if let Ok(path) = ver.path.strip_prefix(&self.base_path) {
                     path
                 } else {
                     &ver.path
                 };
 
-                #[cfg(windows)]
-                if let Err(e) = std::os::windows::fs::symlink_dir(path_to_ver, &path_to_current) {
-                    return Err(e);
-                }
-
-                #[cfg(unix)]
-                if let Err(e) = std::os::unix::fs::symlink(path_to_ver, &path_to_current) {
-                    // TODO: restore prev current
-                    return Err(e);
+                Self::helper_make_script_link(&path_to_ver.to_string_lossy(), &self.base_path.join("lifeblood.cmd"), "")?;
+                
+                // now here - if lifeblood_viewer.cmd already exists - we relink it anyway, but if not - we use do_viewer
+                if do_viewer || self.base_path.join("lifeblood_viewer.cmd").exists() {
+                    Self::helper_make_script_link(&path_to_ver.to_string_lossy(), &self.base_path.join("lifeblood_viewer.cmd"), "viewer")?;
                 }
 
                 self.current_version = i;
@@ -405,9 +449,13 @@ impl InstallationsData {
         // return Err(Error::new(std::io::ErrorKind::Other, "foo test!"));
 
         // (re)make shortcuts
-        Self::helper_make_script_link(&self.base_path.join("lifeblood"), "")?;
-        if do_install_viewer {
-            Self::helper_make_script_link(&self.base_path.join("lifeblood_viewer"), "viewer")?;
+        
+        #[cfg(unix)]
+        {
+            Self::helper_make_script_link("current", &self.base_path.join("lifeblood"), "")?;
+            if do_install_viewer {
+                Self::helper_make_script_link("current", &self.base_path.join("lifeblood_viewer"), "viewer")?;
+            }
         }
 
         // save some metadata
@@ -431,8 +479,15 @@ impl InstallationsData {
         //
 
         // last sanity check
+        // on *nix we use wrapper around linked dir "current"
+        // on windows links are privileged, so we use lifeblood.cmd pointing directly to the commit
+        #[cfg(unix)]
         if !self.base_path.join("current").exists() {
-            wraperr!("create 'current' link", self.make_version_current(inserted_index));
+            wraperr!("create 'current' link", self.make_version_current_unix(inserted_index));
+        }
+        //#[cfg(windows)]
+        if !self.base_path.join("lifeblood.cmd").exists() {
+            wraperr!("create 'current' link", self.make_version_current_win(inserted_index, do_install_viewer));
         }
 
         Ok(inserted_index)
@@ -607,15 +662,16 @@ impl InstallationsData {
 
         macro_rules! error_cleanup {
             () => {
-                if dest_dir.exists() {
-                    fs::remove_dir_all(&dest_dir)?; // sloppy error report
-                }
-                match existing_dest {
-                    Some(path) => {
-                        fs::rename(&path, &dest_dir)?; // sloppy error report
-                    }
-                    None => (),
-                }
+                println!("error cleanup disabled for debug")
+                // if dest_dir.exists() {
+                //     fs::remove_dir_all(&dest_dir)?; // sloppy error report
+                // }
+                // match existing_dest {
+                //     Some(path) => {
+                //         fs::rename(&path, &dest_dir)?; // sloppy error report
+                //     }
+                //     None => (),
+                // }
             };
         }
 
@@ -837,12 +893,12 @@ impl InstallationsData {
         }
         println!("{}", dest_dir.exists());
         println!("{}", dest_dir.join("venv").exists());
-        println!("{}", dest_dir.join("venv").join("bin").exists());
-        println!("{}", dest_dir.join("venv").join("bin").join("python").exists());
-        println!("{:?}", dest_dir.join("venv").join("bin").join("python"));
+        println!("{}", dest_dir.join("venv").join(VENV_BIN).exists());
+        println!("{}", dest_dir.join("venv").join(VENV_BIN).join("python").exists());
+        println!("{:?}", dest_dir.join("venv").join(VENV_BIN).join("python"));
         // run pip
         let exit_status =
-            match process::Command::new(dest_dir.join("venv").join("bin").join("python"))
+            match process::Command::new(dest_dir.join("venv").join(VENV_BIN).join("python"))
                 .current_dir(dest_dir)
                 .arg("-m")
                 .arg("pip")
@@ -928,7 +984,7 @@ impl InstallationsData {
     /// gets embedded python for windows case
     fn helper_prepare_windows_venv(dest_dir: &Path) -> Result<(), Error> {
         let pyver = "3.10.9"; // TODO: do not hardcode
-        let pycode = "3.10";
+        let pycode = "310";
         //
 
         let pyzip = Self::helper_download_single_file(
@@ -945,7 +1001,7 @@ impl InstallationsData {
         if !venv_path.exists() {
             fs::create_dir(&venv_path)?;
         }
-        let venv_bin_path = venv_path.join("bin");
+        let venv_bin_path = venv_path.join(VENV_BIN);
         if !venv_bin_path.exists() {
             fs::create_dir(&venv_bin_path)?;
         }
@@ -954,7 +1010,7 @@ impl InstallationsData {
         // get pip.pyz
         let getpip = Self::helper_download_single_file(
             "https://bootstrap.pypa.io/get-pip.py",
-            &venv_bin_path,
+            &venv_path,
             None,
             "get pip",
         )?;
@@ -965,10 +1021,12 @@ impl InstallationsData {
             "include-system-site-packages = false",
         )?;
         // write special _pth file
-        fs::write(
-            venv_bin_path.join(format!("python{}._pth", pycode)),
-            "import site",
-        )?;
+        let mut py_pth_file = fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(venv_bin_path.join(format!("python{}._pth", pycode)))?;
+        writeln!(py_pth_file, "import site\n\
+                               ..\\..")?;
 
         // now run get-pip.py script
         let exit_status = match process::Command::new(venv_bin_path.join("python"))
@@ -997,9 +1055,20 @@ impl InstallationsData {
             PathBuf::from("python")
         };
 
-        if let Err(_) = process::Command::new(&pypath).arg("--version").status() {
+        match process::Command::new(&pypath).arg("--version").status() {
             // we don't care about result, just that it ran or no
-            return None;
+            Ok(s) => {
+                if let Some(code) = s.code() {
+                    #[cfg(windows)]
+                    if code == 9009 {  // no idea - special windows exic tode meaning command not found?
+                        return None;
+                    }
+                    // otherwise - pass
+                } else {
+                    return None;
+                }
+            },
+            Err(_) => return None
         }
 
         Some(pypath)
@@ -1008,21 +1077,29 @@ impl InstallationsData {
     /// helper func
     /// make common lifeblood link files
     /// used to create lifeblood, lifeblood_viewer
-    fn helper_make_script_link(file_path: &Path, entry_arg: &str) -> Result<(), Error> {
+    fn helper_make_script_link(current_name: &str, file_path: &Path, entry_arg: &str) -> Result<(), Error> {
         #[cfg(windows)]
         let file_path = &file_path.with_extension("cmd");
 
         let contents = if cfg!(unix) {
             format!(
                 "#!/bin/sh\n\
-                cwd=`dirname \\`readlink -f $0\\``\n\
-                exec $cwd/current/venv/bin/python $cwd/current/entry.py {} \"$@\"",
+                 cwd=`dirname \\`readlink -f $0\\``\n\
+                 exec $cwd/{}/venv/{}/python $cwd/{}/entry.py {} \"$@\"",
+                current_name,
+                VENV_BIN,
+                current_name,
                 entry_arg
             )
         } else if cfg!(windows) {
             format!(
-                "@echo off\n\
-                 %~dp0\\current\\bin\\python %~dp0\\current\\entry.py {} %*",
+                "@rem {}\n\
+                 @echo off\n\
+                 %~dp0\\{}\\venv\\{}\\python %~dp0\\{}\\entry.py {} %*",
+                current_name,
+                current_name,
+                VENV_BIN,
+                current_name,
                 entry_arg
             )
         } else {
