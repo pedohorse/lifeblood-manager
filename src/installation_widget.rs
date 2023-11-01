@@ -1,8 +1,9 @@
+use crate::theme::*;
 use crate::widgets::Widget;
 use crate::InstallationsData;
-use crate::theme::*;
 use fltk::dialog;
 use fltk::enums::LabelType;
+use fltk::misc::InputChoice;
 use fltk::{
     app,
     button::Button,
@@ -20,13 +21,10 @@ use std::{
     path::PathBuf,
     sync::{Mutex, TryLockError},
 };
-use std::{
-    sync::Arc,
-    thread,
-    time::Duration,
-};
+use std::{sync::Arc, thread, time::Duration};
 
 const ITEM_HEIGHT: i32 = 32;
+const DEFAULT_BRANCH: &str = "dev";
 
 const DOWNLOAD_LABEL_ANIM: [&str; 12] = [
     "working... ( 🕛     )",
@@ -48,7 +46,7 @@ pub struct InstallationWidget {
     base_path_input: FileInput,
     installation_table: Table,
     warning_label: Frame,
-    main_flex: Flex
+    main_flex: Flex,
 }
 
 impl InstallationWidget {
@@ -67,13 +65,13 @@ impl InstallationWidget {
         if new_data.is_base_path_tainted() {
             self.warning_label.set_label(
                 "Warning: given path contains elements unrelated to lifeblood.\n\
-                       It's recommended to choose an empty directory for lifeblood installations");
-            self.main_flex.fixed(&self.warning_label, ITEM_HEIGHT*2);
+                       It's recommended to choose an empty directory for lifeblood installations",
+            );
+            self.main_flex.fixed(&self.warning_label, ITEM_HEIGHT * 2);
         } else {
             self.warning_label.set_label("");
             self.main_flex.fixed(&self.warning_label, 1);
         }
-
 
         self.install_data = Some(new_data);
 
@@ -137,6 +135,9 @@ impl Widget for InstallationWidget {
         flex.fixed(&version_control_flex, ITEM_HEIGHT);
         let mut new_install_btn = Button::default().with_label("download freshest");
         version_control_flex.fixed(&new_install_btn, 150);
+        let mut branch_selector = InputChoice::default();
+        branch_selector.add(DEFAULT_BRANCH);
+        branch_selector.set_value(DEFAULT_BRANCH);
         Frame::default();
         let mut make_current_btn = Button::default().with_label("make selected version current");
         version_control_flex.fixed(&make_current_btn, 220);
@@ -200,7 +201,7 @@ impl Widget for InstallationWidget {
             .unwrap()
             .installation_table
             .draw_cell(move |t, ctx, row, col, x, y, w, h| {
-                let ver_id = (t.rows()-1 - row) as usize;
+                let ver_id = (t.rows() - 1 - row) as usize;
                 match ctx {
                     TableContext::Cell => {
                         draw::push_clip(x, y, w, h);
@@ -245,7 +246,7 @@ impl Widget for InstallationWidget {
                                                 }
                                             }
                                             1 => draw::draw_text2(
-                                                ver.source_commit(),
+                                                ver.source_commit_hash(),
                                                 x,
                                                 y,
                                                 w,
@@ -311,7 +312,7 @@ impl Widget for InstallationWidget {
             if row < 0 {
                 return;
             }
-            let ver_id = (guard.installation_table.rows()-1 - row) as usize;
+            let ver_id = (guard.installation_table.rows() - 1 - row) as usize;
             match guard.install_data {
                 Some(ref mut data) => {
                     data.make_version_current(ver_id).unwrap_or_else(|e| {
@@ -326,13 +327,18 @@ impl Widget for InstallationWidget {
         // download freshhhh
         let widget_to_cb = widget.clone();
         new_install_btn.set_callback(move |btn| {
+            let branch = match branch_selector.value() {
+                Some(x) => x,
+                None => DEFAULT_BRANCH.to_owned(),
+            };
+            
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
                     let guard = &mut widget_to_cb.lock().unwrap();
                     match guard.install_data {
                         Some(ref mut data) => {
                             // download latest
-                            let new_ver = match data.download_new_version() {
+                            let new_ver = match data.download_new_version(&branch, true) {
                                 Ok(idx) => {
                                     // TODO: result process somehow
                                     idx
@@ -371,15 +377,15 @@ impl Widget for InstallationWidget {
                         eprintln!("{}", err_msg);
                         let wind = btn.window().unwrap();
                         dialog::alert(
-                            wind.x() + (wind.w()/2) as i32 - 300,
-                            wind.y() + (wind.h()/2) as i32 - 100,
-                            &err_msg
+                            wind.x() + (wind.w() / 2) as i32 - 300,
+                            wind.y() + (wind.h() / 2) as i32 - 100,
+                            &err_msg,
                         );
                     }
-                    Err(e) =>  {
+                    Err(e) => {
                         eprintln!("thead join failed! {:?}", e);
                     }
-                    _ => ()
+                    _ => (),
                 }
             });
 
