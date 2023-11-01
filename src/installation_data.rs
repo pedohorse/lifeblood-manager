@@ -1,5 +1,4 @@
 use chrono::prelude::*;
-use std::fs;
 use std::fs::File;
 use std::io::{prelude::*, BufWriter};
 use std::io::{BufReader, Error};
@@ -8,6 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::thread::current;
+use std::{env, fs};
 
 use downloader::{Download, Downloader};
 
@@ -147,11 +147,10 @@ impl InstallationsData {
         let mut current_path = PathBuf::new();
         let mut base_path_tainted = false;
 
-        let base_path = if let Ok(x) = fs::canonicalize(base_path) { x } else {
-            return Err(Error::new(
-                std::io::ErrorKind::InvalidData,
-                "bad base path"
-            ))
+        let base_path = if let Ok(x) = fs::canonicalize(base_path) {
+            x
+        } else {
+            return Err(Error::new(std::io::ErrorKind::InvalidData, "bad base path"));
         };
 
         match fs::read_dir(&base_path) {
@@ -210,7 +209,8 @@ impl InstallationsData {
                             let contents = fs::read_to_string(&path)?;
                             match contents.lines().next() {
                                 Some(line) => {
-                                    current_path = base_path.join(&line[5..].trim());  // first 4 symbols are expected to be "@rem "
+                                    current_path = base_path.join(&line[5..].trim());
+                                    // first 4 symbols are expected to be "@rem "
                                 }
                                 None => {
                                     eprintln!("malformed lifeblood.cmd, recreate it");
@@ -218,8 +218,21 @@ impl InstallationsData {
                             };
                         }
                         path => {
-                            base_path_tainted = true;
-                            println!("skipping {:?}", path);
+                            // expected exceptions
+                            let itsa_me = if let Ok(p) = env::current_exe() {
+                                p == path
+                            } else {
+                                false
+                            };
+                            if !itsa_me
+                                && !path.ends_with("lifeblood")
+                                && !path.ends_with("lifeblood.cmd")
+                                && !path.ends_with("lifeblood_viewer")
+                                && !path.ends_with("lifeblood_viewer.cmd")
+                            {
+                                base_path_tainted = true;
+                                println!("skipping {:?}", path);
+                            }
                             continue;
                         }
                     }
@@ -273,7 +286,9 @@ impl InstallationsData {
         self.current_version
     }
 
-    pub fn iter_versions(&self) -> impl DoubleEndedIterator<Item = &InstalledVersion> + ExactSizeIterator + '_ {
+    pub fn iter_versions(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &InstalledVersion> + ExactSizeIterator + '_ {
         self.versions.iter()
     }
 
@@ -330,11 +345,19 @@ impl InstallationsData {
                     &ver.path
                 };
 
-                Self::helper_make_script_link(&path_to_ver.to_string_lossy(), &self.base_path.join("lifeblood.cmd"), "")?;
-                
+                Self::helper_make_script_link(
+                    &path_to_ver.to_string_lossy(),
+                    &self.base_path.join("lifeblood.cmd"),
+                    "",
+                )?;
+
                 // now here - if lifeblood_viewer.cmd already exists - we relink it anyway, but if not - we use do_viewer
                 if do_viewer || self.base_path.join("lifeblood_viewer.cmd").exists() {
-                    Self::helper_make_script_link(&path_to_ver.to_string_lossy(), &self.base_path.join("lifeblood_viewer.cmd"), "viewer")?;
+                    Self::helper_make_script_link(
+                        &path_to_ver.to_string_lossy(),
+                        &self.base_path.join("lifeblood_viewer.cmd"),
+                        "viewer",
+                    )?;
                 }
 
                 self.current_version = i;
@@ -349,7 +372,11 @@ impl InstallationsData {
     ///
     /// TODO: give branch
     /// TODO: provide option to get viewer too
-    pub fn download_new_version(&mut self, branch_name: &str, do_install_viewer: bool) -> Result<usize, Error> {
+    pub fn download_new_version(
+        &mut self,
+        branch_name: &str,
+        do_install_viewer: bool,
+    ) -> Result<usize, Error> {
         macro_rules! noop {
             ($($t:tt)*) => {};
         }
@@ -375,7 +402,10 @@ impl InstallationsData {
         }
 
         //
-        println!("downloading branch {}, viewer too: {}", branch_name, do_install_viewer);
+        println!(
+            "downloading branch {}, viewer too: {}",
+            branch_name, do_install_viewer
+        );
 
         let mut cleanups: Vec<Box<dyn FnOnce() -> Result<(), Error>>> = Vec::new();
 
@@ -449,18 +479,27 @@ impl InstallationsData {
         // return Err(Error::new(std::io::ErrorKind::Other, "foo test!"));
 
         // (re)make shortcuts
-        
+
         #[cfg(unix)]
         {
             Self::helper_make_script_link("current", &self.base_path.join("lifeblood"), "")?;
             if do_install_viewer {
-                Self::helper_make_script_link("current", &self.base_path.join("lifeblood_viewer"), "viewer")?;
+                Self::helper_make_script_link(
+                    "current",
+                    &self.base_path.join("lifeblood_viewer"),
+                    "viewer",
+                )?;
             }
         }
 
         // save some metadata
 
-        helper_save_metadata(&dest_dir.join("meta.info"), &hash, &commit_full, date.into())?;
+        helper_save_metadata(
+            &dest_dir.join("meta.info"),
+            &hash,
+            &commit_full,
+            date.into(),
+        )?;
 
         //
         // update versions list
@@ -483,11 +522,17 @@ impl InstallationsData {
         // on windows links are privileged, so we use lifeblood.cmd pointing directly to the commit
         #[cfg(unix)]
         if !self.base_path.join("current").exists() {
-            wraperr!("create 'current' link", self.make_version_current_unix(inserted_index));
+            wraperr!(
+                "create 'current' link",
+                self.make_version_current_unix(inserted_index)
+            );
         }
-        //#[cfg(windows)]
+        #[cfg(windows)]
         if !self.base_path.join("lifeblood.cmd").exists() {
-            wraperr!("create 'current' link", self.make_version_current_win(inserted_index, do_install_viewer));
+            wraperr!(
+                "create 'current' link",
+                self.make_version_current_win(inserted_index, do_install_viewer)
+            );
         }
 
         Ok(inserted_index)
@@ -891,11 +936,10 @@ impl InstallationsData {
                 }
             }
         }
-        println!("{}", dest_dir.exists());
-        println!("{}", dest_dir.join("venv").exists());
-        println!("{}", dest_dir.join("venv").join(VENV_BIN).exists());
-        println!("{}", dest_dir.join("venv").join(VENV_BIN).join("python").exists());
-        println!("{:?}", dest_dir.join("venv").join(VENV_BIN).join("python"));
+        println!(
+            "venv python at {:?}",
+            dest_dir.join("venv").join(VENV_BIN).join("python")
+        );
         // run pip
         let exit_status =
             match process::Command::new(dest_dir.join("venv").join(VENV_BIN).join("python"))
@@ -1025,8 +1069,11 @@ impl InstallationsData {
             .write(true)
             .append(true)
             .open(venv_bin_path.join(format!("python{}._pth", pycode)))?;
-        writeln!(py_pth_file, "import site\n\
-                               ..\\..")?;
+        writeln!(
+            py_pth_file,
+            "import site\n\
+             ..\\.."
+        )?;
 
         // now run get-pip.py script
         let exit_status = match process::Command::new(venv_bin_path.join("python"))
@@ -1060,15 +1107,16 @@ impl InstallationsData {
             Ok(s) => {
                 if let Some(code) = s.code() {
                     #[cfg(windows)]
-                    if code == 9009 {  // no idea - special windows exic tode meaning command not found?
+                    if code == 9009 {
+                        // no idea - special windows exic tode meaning command not found?
                         return None;
                     }
                     // otherwise - pass
                 } else {
                     return None;
                 }
-            },
-            Err(_) => return None
+            }
+            Err(_) => return None,
         }
 
         Some(pypath)
@@ -1077,7 +1125,11 @@ impl InstallationsData {
     /// helper func
     /// make common lifeblood link files
     /// used to create lifeblood, lifeblood_viewer
-    fn helper_make_script_link(current_name: &str, file_path: &Path, entry_arg: &str) -> Result<(), Error> {
+    fn helper_make_script_link(
+        current_name: &str,
+        file_path: &Path,
+        entry_arg: &str,
+    ) -> Result<(), Error> {
         #[cfg(windows)]
         let file_path = &file_path.with_extension("cmd");
 
@@ -1086,21 +1138,14 @@ impl InstallationsData {
                 "#!/bin/sh\n\
                  cwd=`dirname \\`readlink -f $0\\``\n\
                  exec $cwd/{}/venv/{}/python $cwd/{}/entry.py {} \"$@\"",
-                current_name,
-                VENV_BIN,
-                current_name,
-                entry_arg
+                current_name, VENV_BIN, current_name, entry_arg
             )
         } else if cfg!(windows) {
             format!(
                 "@rem {}\n\
                  @echo off\n\
                  %~dp0\\{}\\venv\\{}\\python %~dp0\\{}\\entry.py {} %*",
-                current_name,
-                current_name,
-                VENV_BIN,
-                current_name,
-                entry_arg
+                current_name, current_name, VENV_BIN, current_name, entry_arg
             )
         } else {
             return Err(Error::new(
