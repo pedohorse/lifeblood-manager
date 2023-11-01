@@ -18,7 +18,7 @@ use zip::ZipArchive;
 #[derive(Debug)]
 pub struct InstalledVersion {
     path: PathBuf,
-    commit: String,
+    hash: String,
     date: DateTime<Utc>,
     has_viewer: bool,
 }
@@ -93,7 +93,7 @@ impl InstalledVersion {
 
         // try read metadata
         let date = match helper_read_metadata(&path.join("meta.info")) {
-            Ok((hash, date)) => {
+            Ok((hash, _, date)) => {
                 if file_name != hash {
                     return Err(Error::new(
                         std::io::ErrorKind::InvalidData,
@@ -113,14 +113,18 @@ impl InstalledVersion {
 
         Ok(InstalledVersion {
             path,
-            commit: file_name,
+            hash: file_name,
             date,
             has_viewer,
         })
     }
 
-    pub fn source_commit(&self) -> &str {
-        &self.commit
+    pub fn source_commit_hash(&self) -> &str {
+        &self.hash
+    }
+
+    pub fn has_viewer(&self) -> bool {
+        self.has_viewer
     }
 
     pub fn date(&self) -> &DateTime<Utc> {
@@ -301,7 +305,7 @@ impl InstallationsData {
     ///
     /// TODO: give branch
     /// TODO: provide option to get viewer too
-    pub fn download_new_version(&mut self) -> Result<usize, Error> {
+    pub fn download_new_version(&mut self, branch_name: &str, do_install_viewer: bool) -> Result<usize, Error> {
         macro_rules! noop {
             ($($t:tt)*) => {};
         }
@@ -326,8 +330,10 @@ impl InstallationsData {
             }
         }
 
+        //
+        println!("downloading branch {}, viewer too: {}", branch_name, do_install_viewer);
+
         let mut cleanups: Vec<Box<dyn FnOnce() -> Result<(), Error>>> = Vec::new();
-        //                Vec<impl Fn() -> Result<(), Error>>
 
         macro_rules! cleanup {
             ($($preverr:literal)?) => {
@@ -337,7 +343,6 @@ impl InstallationsData {
                 }
             };
         }
-        let do_install_viewer = true; // TODO make into an arg
 
         let temp_location = std::env::temp_dir();
 
@@ -345,15 +350,17 @@ impl InstallationsData {
         // download phase
         let downloaded_zip = wraperr!(
             "download phase",
-            Self::helper_download(&temp_location),
+            Self::helper_download(&temp_location, branch_name),
             cleanup!
         );
+        // add cleanup for downloaded stuff
         let cleanup_downloaded_zip = downloaded_zip.clone();
         cleanups.push(Box::new(|| -> Result<(), Error> {
             println!("removing: {:?}", cleanup_downloaded_zip);
             fs::remove_file(cleanup_downloaded_zip)
         }));
 
+        // create unzip dir
         let unzip_location = downloaded_zip.with_extension("");
         if let Err(e) = fs::create_dir(&unzip_location) {
             // cleanup
@@ -363,6 +370,7 @@ impl InstallationsData {
                 format!("failed to create temp directory: {}", e),
             ));
         }
+        // add cleanup for unzipped stuff
         let cleanup_unzip_location = unzip_location.clone();
         cleanups.push(Box::new(move || -> Result<(), Error> {
             println!("removing: {:?}", cleanup_unzip_location);
@@ -371,16 +379,17 @@ impl InstallationsData {
 
         //
         // unpacking phase
-        let (hash, date) = wraperr!(
+        let (commit_full, date) = wraperr!(
             "unpack phase",
             Self::helper_unpack(&downloaded_zip, &unzip_location),
             cleanup!
         );
+        let hash = &commit_full[..13];
         // removing dir already added to cleanup
 
         // check if already installed, maybe without viewer
         for (i, ver) in self.versions.iter().enumerate() {
-            if ver.commit == hash && (ver.has_viewer || !do_install_viewer) {
+            if ver.hash == hash && (ver.has_viewer || !do_install_viewer) {
                 println!("latest commit already downloaded!");
                 cleanup!();
                 return Ok(i);
@@ -403,7 +412,7 @@ impl InstallationsData {
 
         // save some metadata
 
-        helper_save_metadata(&dest_dir.join("meta.info"), &hash, date.into())?;
+        helper_save_metadata(&dest_dir.join("meta.info"), &hash, &commit_full, date.into())?;
 
         //
         // update versions list
@@ -411,7 +420,7 @@ impl InstallationsData {
             &mut self.versions,
             InstalledVersion {
                 path: dest_dir,
-                commit: hash,
+                hash: hash.to_owned(),
                 date,
                 has_viewer: do_install_viewer,
             },
@@ -446,7 +455,7 @@ impl InstallationsData {
 
     /// helper func
     /// download latest commit
-    fn helper_download(download_location: &Path) -> Result<PathBuf, Error> {
+    fn helper_download(download_location: &Path, branch_name: &str) -> Result<PathBuf, Error> {
         let mut downloader = match Downloader::builder()
             .download_folder(&download_location)
             .connect_timeout(std::time::Duration::from_secs(90))
@@ -463,10 +472,9 @@ impl InstallationsData {
         };
 
         let mut rng = thread_rng();
-        let branch = "dev";
         let url = format!(
             "https://github.com/pedohorse/lifeblood/archive/refs/heads/{}.zip",
-            branch
+            branch_name
         );
 
         let temp_filename: PathBuf = PathBuf::from(
@@ -541,7 +549,7 @@ impl InstallationsData {
             }
         };
 
-        let hash = String::from_utf8_lossy(zip_reader.comment())[..13].to_string();
+        let comment = String::from_utf8_lossy(zip_reader.comment()).to_string();
         let date = match zip_reader.by_index(0) {
             Ok(x) => {
                 let zipdate = x.last_modified();
@@ -571,7 +579,7 @@ impl InstallationsData {
             ));
         }
 
-        Ok((hash, date))
+        Ok((comment, date))
     }
 
     /// helper func
@@ -1071,7 +1079,8 @@ impl InstallationsData {
 /// save metadata file
 fn helper_save_metadata(
     info_file_path: &Path,
-    commit_info: &str,
+    commit_short: &str,
+    commit_full: &str,
     date: DateTime<Utc>,
 ) -> Result<(), Error> {
     let mut file = match fs::File::create(info_file_path) {
@@ -1085,7 +1094,8 @@ fn helper_save_metadata(
     };
 
     write!(file, "1\n")?;
-    write!(file, "{}\n", commit_info)?;
+    write!(file, "{}\n", commit_short)?;
+    write!(file, "{}\n", commit_full)?;
     write!(file, "{:?}", date)?;
 
     Ok(())
@@ -1093,7 +1103,7 @@ fn helper_save_metadata(
 
 /// helper func
 /// read back previously saved metadata file
-fn helper_read_metadata(info_file_path: &Path) -> Result<(String, DateTime<Utc>), Error> {
+fn helper_read_metadata(info_file_path: &Path) -> Result<(String, String, DateTime<Utc>), Error> {
     let mut file = match fs::File::open(info_file_path) {
         Ok(file) => BufReader::new(file),
         Err(e) => {
@@ -1115,7 +1125,11 @@ fn helper_read_metadata(info_file_path: &Path) -> Result<(String, DateTime<Utc>)
 
     buf.clear();
     file.read_line(&mut buf)?;
-    let commit = buf.trim().to_owned();
+    let commit_short = buf.trim().to_owned();
+
+    buf.clear();
+    file.read_line(&mut buf)?;
+    let commit_full = buf.trim().to_owned();
 
     buf.clear();
     file.read_line(&mut buf)?;
@@ -1128,5 +1142,5 @@ fn helper_read_metadata(info_file_path: &Path) -> Result<(String, DateTime<Utc>)
         ));
     };
 
-    Ok((commit, date))
+    Ok((commit_short, commit_full, date))
 }
