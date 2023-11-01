@@ -125,11 +125,16 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
     let mut state = InstallArgsNewParsingState::ExpectPathOrFlag;
     let mut branch = "dev".to_owned();
     let mut base_path = PathBuf::new();
+    let mut do_viewer = true;
 
     for arg in args {
         match (state, arg) {
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) if arg == "--branch" => {
                 state = InstallArgsNewParsingState::ExpectingBranch
+            }
+            (InstallArgsNewParsingState::ExpectPathOrFlag, arg) if arg == "--no-viewer" => {
+                do_viewer = false;
+                state = InstallArgsNewParsingState::NotExpectingAnything;
             }
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) => {
                 base_path = PathBuf::from(arg);
@@ -149,7 +154,7 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
 
     let mut installs = help_get_installs_from_dir(base_path);
 
-    match installs.download_new_version() {
+    match installs.download_new_version(&branch, do_viewer) {
         Ok(_) => {
             println!("New version downloaded and set current");
         }
@@ -179,7 +184,7 @@ fn list_installs(installs: &InstallationsData) {
             } else {
                 "       "
             },
-            ver.source_commit(),
+            ver.source_commit_hash(),
             ver.date().format("%d-%m-%Y %H:%M:%S").to_string()
         );
     }
