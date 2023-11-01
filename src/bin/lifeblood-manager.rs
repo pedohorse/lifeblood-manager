@@ -16,7 +16,7 @@ fn main() {
     app::set_selection_color(SEL_COLOR[0], SEL_COLOR[1], SEL_COLOR[2]);
     app::set_visible_focus(false);
 
-    let mut wind = Window::default().with_size(650, 400).with_label("foo");
+    let mut wind = Window::default().with_size(650, 400).with_label("Lifeblood Manager");
     let mut tabs = Tabs::default_fill();
 
     let install_widget = InstallationWidget::initialize();
