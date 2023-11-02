@@ -304,7 +304,7 @@ impl InstallationsData {
     }
 
     #[cfg(unix)]
-    pub fn make_version_current_unix(&mut self, i: usize) -> Result<(), Error> {
+    fn make_version_current_unix(&mut self, i: usize) -> Result<(), Error> {
         match self.versions.get(i) {
             Some(ver) => {
                 // try to get a relpath
@@ -336,7 +336,7 @@ impl InstallationsData {
     }
 
     //#[cfg(windows)]
-    pub fn make_version_current_win(&mut self, i: usize, do_viewer: bool) -> Result<(), Error> {
+    fn make_version_current_win(&mut self, i: usize, do_viewer: bool) -> Result<(), Error> {
         match self.versions.get(i) {
             Some(ver) => {
                 let path_to_ver = if let Ok(path) = ver.path.strip_prefix(&self.base_path) {
