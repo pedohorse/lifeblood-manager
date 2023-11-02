@@ -162,6 +162,12 @@ impl InstallationsData {
             return Err(Error::new(std::io::ErrorKind::InvalidData, "bad base path"));
         };
 
+        let maybe_me = if let Ok(p) = env::current_exe() {
+            Some(if let Ok(cp) = p.canonicalize() { cp } else { p })
+        } else {
+            None
+        };
+
         match fs::read_dir(&base_path) {
             Ok(dir_iter) => {
                 for entry in dir_iter {
@@ -228,8 +234,8 @@ impl InstallationsData {
                         }
                         path => {
                             // expected exceptions
-                            let itsa_me = if let Ok(p) = env::current_exe() {
-                                p == path
+                            let itsa_me = if let Some(ref p) = maybe_me {
+                                path == *p
                             } else {
                                 false
                             };
