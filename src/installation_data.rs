@@ -58,6 +58,7 @@ impl InstalledVersion {
     ///
     /// given path construct a version object that is contained in it
     /// or error if given path is not a valid version
+    ///
     pub fn from_path(path: PathBuf) -> Result<InstalledVersion, Error> {
         if !path.is_dir() {
             return Err(Error::new(
@@ -141,6 +142,14 @@ impl InstalledVersion {
 impl InstallationsData {
     ///
     /// construct new installations data scanning given dir
+    ///
+    /// this will scan given path
+    /// every dir that looks like a valid version will be loaded
+    ///
+    /// Note: concept of "current" version is implemented platform-dependent
+    ///
+    /// if directory contains other stuff than what's expected - data will be maked as "tainted"
+    ///
     pub fn from_dir(base_path: PathBuf) -> Result<InstallationsData, Error> {
         let mut versions = Vec::new();
         let mut current_version = usize::MAX;
@@ -257,19 +266,30 @@ impl InstallationsData {
         })
     }
 
+    ///
+    /// base path where all versions were scanned
+    ///
     pub fn base_path(&self) -> &Path {
         &self.base_path
     }
 
+    ///
     /// true if non-lifeblood related crap is detected in the given base_path
+    ///
     pub fn is_base_path_tainted(&self) -> bool {
         self.base_path_tainted
     }
 
+    ///
+    /// get version from index
+    ///
     pub fn version(&self, i: usize) -> Option<&InstalledVersion> {
         self.versions.get(i)
     }
 
+    ///
+    /// current version if set
+    ///
     pub fn current_version(&self) -> Option<&InstalledVersion> {
         if self.current_version == usize::MAX {
             None
@@ -282,20 +302,38 @@ impl InstallationsData {
         }
     }
 
+    ///
+    /// index of current version
+    ///
     pub fn current_version_index(&self) -> usize {
         self.current_version
     }
 
+    ///
+    /// iterator over versions
+    ///
     pub fn iter_versions(
         &self,
     ) -> impl DoubleEndedIterator<Item = &InstalledVersion> + ExactSizeIterator + '_ {
         self.versions.iter()
     }
 
+    ///
+    /// number of versions found
+    ///
     pub fn version_count(&self) -> usize {
         self.versions.len()
     }
 
+    ///
+    /// set given version by index as current
+    ///
+    /// concept of "current" is implemented differently on different platforms
+    /// in any way this will cause modifications to the filesystem
+    ///
+    /// on unix - "current" link will be changed
+    /// on windows - lifeblood.cmd lifeblood_viewer.cmd will be changed directly
+    ///
     pub fn make_version_current(&mut self, i: usize) -> Result<(), Error> {
         #[cfg(unix)]
         return self.make_version_current_unix(i);
@@ -370,8 +408,15 @@ impl InstallationsData {
     ///
     /// download freshest commit from given branch, and makes an "installation" of it
     ///
-    /// TODO: give branch
-    /// TODO: provide option to get viewer too
+    /// given branch name will be downloaded and "installed"  into base_path.
+    /// if do_install_viewer is true - viewer will also be installed
+    ///
+    /// This operation will modify current base_dir, but will not switch current if it already exists
+    /// during the process a bunch of files will be downloaded and unzipped into system's temporary location
+    /// this will all be cleared on both success and failure
+    ///
+    /// this is a long operation, as it involves downloading and installing a bunch of pip packages
+    ///
     pub fn download_new_version(
         &mut self,
         branch_name: &str,
@@ -401,12 +446,6 @@ impl InstallationsData {
             }
         }
 
-        //
-        println!(
-            "downloading branch {}, viewer too: {}",
-            branch_name, do_install_viewer
-        );
-
         let mut cleanups: Vec<Box<dyn FnOnce() -> Result<(), Error>>> = Vec::new();
 
         macro_rules! cleanup {
@@ -419,6 +458,12 @@ impl InstallationsData {
         }
 
         let temp_location = std::env::temp_dir();
+
+        //
+        println!(
+            "downloading branch {}, viewer too: {}",
+            branch_name, do_install_viewer
+        );
 
         //
         // download phase
@@ -540,6 +585,7 @@ impl InstallationsData {
 
     ///
     /// insert into sorted list and return inserted index
+    ///
     fn insert_version_sorted_by_date(
         versions: &mut Vec<InstalledVersion>,
         ver: InstalledVersion,
@@ -553,8 +599,11 @@ impl InstallationsData {
         }
     }
 
+    ///
     /// helper func
+    ///
     /// download latest commit
+    ///
     fn helper_download(download_location: &Path, branch_name: &str) -> Result<PathBuf, Error> {
         let mut downloader = match Downloader::builder()
             .download_folder(&download_location)
@@ -625,8 +674,11 @@ impl InstallationsData {
         Ok(downloaded_zip)
     }
 
+    ///
     /// helper func
+    ///
     /// unpack zip
+    ///
     fn helper_unpack(
         zip_file: &Path,
         unzip_location: &Path,
@@ -682,9 +734,12 @@ impl InstallationsData {
         Ok((comment, date))
     }
 
+    ///
     /// helper func
+    ///
     /// "install" the whole thing
     /// create all dirs, venv, copy stuff, etc
+    ///
     fn helper_install(
         &mut self,
         unzip_location: &Path,
@@ -833,8 +888,11 @@ impl InstallationsData {
         Ok(())
     }
 
+    ///
     /// helper func
+    ///
     /// copy dirs, with overwriting
+    ///
     fn helper_copy_dir(src: &Path, dest: &Path) -> Result<(), Error> {
         let mut copy_options = CopyOptions::new();
         copy_options.overwrite = true;
@@ -849,8 +907,11 @@ impl InstallationsData {
         Ok(())
     }
 
+    ///
     /// helper func
+    ///
     /// somewhat parse setup.cfg and get requirements
+    ///
     fn helper_get_requirements_from_setupcfg(path: &Path) -> Result<Vec<String>, Error> {
         let mut config_cfg = String::new();
         match fs::File::open(path) {
@@ -895,8 +956,11 @@ impl InstallationsData {
         Ok(reqs)
     }
 
+    ///
     /// helper func
+    ///
     /// just write strings as we like it
+    ///
     fn helper_write_strings_to_file(strings: Vec<String>, file_path: &Path) -> Result<(), Error> {
         let file = fs::File::create(file_path)?;
         let mut file = BufWriter::new(file);
@@ -908,8 +972,18 @@ impl InstallationsData {
         Ok(())
     }
 
+    ///
     /// helper func
+    ///
     /// install venv phase
+    ///
+    /// for unix it assumes that given python has venv module available
+    /// so it will use that to create proper venv
+    ///
+    /// on windows extra step will be added - in canse python is not available -
+    /// it will be downloaded, minimal python venv will be handcrafted,
+    /// get_pip will be used to get pip
+    ///
     fn helper_install_venv(dest_dir: &Path, requirements_path: &Path) -> Result<(), Error> {
         // if venv dir is present - skip creating venv
         if !dest_dir.join("venv").exists() {
@@ -964,8 +1038,11 @@ impl InstallationsData {
         Ok(())
     }
 
+    ///
     /// helper func
+    ///
     /// download single file, that's it
+    ///
     fn helper_download_single_file(
         url: &str,
         dest_dir: &Path,
@@ -1027,8 +1104,16 @@ impl InstallationsData {
         Ok(downloaded_file)
     }
 
+    ///
     /// helper func
+    ///
     /// gets embedded python for windows case
+    ///
+    /// windows-specific venv creation
+    /// uses special embedded python
+    /// manually creates bare minimum for python to understand it's in venv
+    /// installs pip with get-pip.py special script from pypi
+    ///
     fn helper_prepare_windows_venv(dest_dir: &Path) -> Result<(), Error> {
         let pyver = "3.10.9"; // TODO: do not hardcode
         let pycode = "310";
@@ -1094,8 +1179,18 @@ impl InstallationsData {
         Ok(())
     }
 
+    ///
     /// helper func
+    ///
     /// find python executable
+    ///
+    /// usese PYTHON_BIN env variable
+    /// if not set - assumes standard `python` command
+    /// then tries to determine validity by simply running `python --version`
+    ///
+    /// if a valid working python was found - it's path is returned
+    /// otherwise - None
+    ///
     fn helper_get_python_command() -> Option<PathBuf> {
         // TODO: do checks, use env variable or smth
         //  propagate errors
@@ -1125,9 +1220,12 @@ impl InstallationsData {
         Some(pypath)
     }
 
+    ///
     /// helper func
+    ///
     /// make common lifeblood link files
     /// used to create lifeblood, lifeblood_viewer
+    ///
     fn helper_make_script_link(
         current_name: &str,
         file_path: &Path,
@@ -1200,8 +1298,11 @@ impl InstallationsData {
     }
 }
 
+///
 /// helper func
+///
 /// save metadata file
+///
 fn helper_save_metadata(
     info_file_path: &Path,
     commit_short: &str,
@@ -1226,8 +1327,11 @@ fn helper_save_metadata(
     Ok(())
 }
 
+///
 /// helper func
+///
 /// read back previously saved metadata file
+///
 fn helper_read_metadata(info_file_path: &Path) -> Result<(String, String, DateTime<Utc>), Error> {
     let mut file = match fs::File::open(info_file_path) {
         Ok(file) => BufReader::new(file),
