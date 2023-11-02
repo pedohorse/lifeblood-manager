@@ -707,16 +707,19 @@ impl InstallationsData {
 
         macro_rules! error_cleanup {
             () => {
-                println!("error cleanup disabled for debug")
-                // if dest_dir.exists() {
-                //     fs::remove_dir_all(&dest_dir)?; // sloppy error report
-                // }
-                // match existing_dest {
-                //     Some(path) => {
-                //         fs::rename(&path, &dest_dir)?; // sloppy error report
-                //     }
-                //     None => (),
-                // }
+                if let Ok("1") = std::env::var("LBMANAGER_DEBUG_KEEP_INSTALL").as_deref() {
+                    println!("keeping partial install dir, as debug env is set");
+                } else {
+                    if dest_dir.exists() {
+                        fs::remove_dir_all(&dest_dir)?; // sloppy error report
+                    }
+                    match existing_dest {
+                        Some(path) => {
+                            fs::rename(&path, &dest_dir)?; // sloppy error report
+                        }
+                        None => (),
+                    }
+                }
             };
         }
 
