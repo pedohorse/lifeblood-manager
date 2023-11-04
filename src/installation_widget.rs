@@ -2,7 +2,7 @@ use crate::theme::*;
 use crate::widgets::Widget;
 use crate::InstallationsData;
 use fltk::dialog;
-use fltk::enums::LabelType;
+use fltk::enums::{CallbackTrigger, LabelType};
 use fltk::misc::InputChoice;
 use fltk::{
     app,
@@ -77,6 +77,7 @@ impl InstallationWidget {
 
         // also update table shit
         self.update_installation_table();
+        self.main_flex.recalc(); // also forces redraw on all children that is needed after label change
 
         Ok(())
     }
@@ -121,12 +122,14 @@ impl Widget for InstallationWidget {
         let mut installations_table = Table::default().with_size(200, 200);
         //tab_header.resizable(widget)
         installations_table.set_rows(0);
-        installations_table.set_cols(3);
+        installations_table.set_cols(5);
         installations_table.set_col_resize(true);
         installations_table.set_row_resize(true);
         installations_table.set_col_width(0, 64);
-        installations_table.set_col_width(1, 300);
+        installations_table.set_col_width(1, 250);
         installations_table.set_col_width(2, 150);
+        installations_table.set_col_width(3, 16);
+        installations_table.set_col_width(4, 350);
 
         installations_table.end();
 
@@ -139,8 +142,10 @@ impl Widget for InstallationWidget {
         branch_selector.add(DEFAULT_BRANCH);
         branch_selector.set_value(DEFAULT_BRANCH);
         Frame::default();
+        let mut rename_ver_btn = Button::default().with_label("rename selected");
         let mut make_current_btn = Button::default().with_label("make selected version current");
-        version_control_flex.fixed(&make_current_btn, 220);
+        version_control_flex.fixed(&rename_ver_btn, 130);
+        version_control_flex.fixed(&make_current_btn, 230);
         version_control_flex.end();
 
         flex.end();
@@ -246,7 +251,7 @@ impl Widget for InstallationWidget {
                                                 }
                                             }
                                             1 => draw::draw_text2(
-                                                ver.source_commit_hash(),
+                                                ver.nice_name(),
                                                 x,
                                                 y,
                                                 w,
@@ -255,6 +260,22 @@ impl Widget for InstallationWidget {
                                             ),
                                             2 => draw::draw_text2(
                                                 &ver.date().format("%d-%m-%Y %H:%M:%S").to_string(),
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            ),
+                                            3 => draw::draw_text2(
+                                                if ver.has_viewer() { "v" } else { " " },
+                                                x,
+                                                y,
+                                                w,
+                                                h,
+                                                enums::Align::Center,
+                                            ),
+                                            4 => draw::draw_text2(
+                                                ver.source_commit(),
                                                 x,
                                                 y,
                                                 w,
@@ -303,6 +324,48 @@ impl Widget for InstallationWidget {
                 }
             });
 
+        // rename button callback
+        let widget_to_cb = widget.clone();
+        rename_ver_btn.set_callback(move |btn| {
+            let mut guard = widget_to_cb.lock().unwrap();
+            let (row, _, _, _) = guard.installation_table.get_selection();
+            if row < 0 {
+                return;
+            }
+
+            let ver_id = (guard.installation_table.rows() - 1 - row) as usize;
+            let install_data = if let Some(data) = &mut guard.install_data {
+                data
+            } else {
+                return;
+            };
+
+            let wind = btn.window().unwrap();
+            let popup_x = wind.x() + wind.w() / 2 - 100;
+            let popup_y = wind.y() + wind.h() / 2 - 50;
+
+            let new_name = if let Some(s) = dialog::input(
+                popup_x,
+                popup_y,
+                "new name",
+                if let Some(v) = install_data.version(ver_id) {
+                    v.nice_name()
+                } else {
+                    "new_name"
+                },
+            ) {
+                s
+            } else {
+                return;
+            };
+            
+            if let Err(e) = install_data.rename_version(ver_id, new_name) {
+                eprintln!("failed to rename! {}", e);
+                dialog::alert(popup_x, popup_y, &format!("failed to rename! {}", e));
+            }
+            guard.installation_table.redraw();
+        });
+
         // set current button callback
         let widget_to_cb = widget.clone();
         make_current_btn.set_callback(move |_| {
@@ -331,7 +394,7 @@ impl Widget for InstallationWidget {
                 Some(x) => x,
                 None => DEFAULT_BRANCH.to_owned(),
             };
-            
+
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
                     let guard = &mut widget_to_cb.lock().unwrap();
