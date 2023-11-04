@@ -24,7 +24,8 @@ const VENV_BIN: &str = "Scripts";
 #[derive(Debug)]
 pub struct InstalledVersion {
     path: PathBuf,
-    hash: String,
+    nice_name: String,
+    commit: String,
     date: DateTime<Utc>,
     has_viewer: bool,
 }
@@ -99,19 +100,11 @@ impl InstalledVersion {
         }
 
         // try read metadata
-        let date = match helper_read_metadata(&path.join("meta.info")) {
-            Ok((hash, _, date)) => {
-                if file_name != hash {
-                    return Err(Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "hash in meta.info does not match dir name",
-                    ));
-                }
-                date
-            }
+        let (commit, date) = match helper_read_metadata(&path.join("meta.info")) {
+            Ok((_, commit, date)) => (commit, date),
             Err(_) => {
-                eprintln!("failed to read date from metadata, using dir creation time");
-                path.metadata()?.created()?.into()
+                eprintln!("failed to read date from metadata, using dir name and creation time");
+                ("unknown".to_owned(), path.metadata()?.created()?.into())
             }
         };
 
@@ -120,14 +113,19 @@ impl InstalledVersion {
 
         Ok(InstalledVersion {
             path,
-            hash: file_name,
+            nice_name: file_name,
+            commit,
             date,
             has_viewer,
         })
     }
 
-    pub fn source_commit_hash(&self) -> &str {
-        &self.hash
+    pub fn nice_name(&self) -> &str {
+        &self.nice_name
+    }
+
+    pub fn source_commit(&self) -> &str {
+        &self.commit
     }
 
     pub fn has_viewer(&self) -> bool {
@@ -137,9 +135,36 @@ impl InstalledVersion {
     pub fn date(&self) -> &DateTime<Utc> {
         &self.date
     }
+
+    pub fn set_nice_name(&mut self, name: String) -> Result<(), Error> {
+        let new_path = self.path.with_file_name(&name);
+        std::fs::rename(&self.path, &new_path)?;
+        self.path = new_path;
+        self.nice_name = name;
+
+        Ok(())
+    }
 }
 
 impl InstallationsData {
+    ///
+    /// rename given version, update current if needed
+    /// this may fail if FS deems name bad
+    pub fn rename_version(&mut self, version_id: usize, new_name: String) -> Result<(), Error> {
+        if version_id >= self.versions.len() {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "given version_id does not exist",
+            ));
+        }
+        self.versions[version_id].set_nice_name(new_name)?;
+        if self.current_version == version_id {
+            self.make_version_current(version_id)?;
+        }
+
+        Ok(())
+    }
+
     ///
     /// construct new installations data scanning given dir
     ///
@@ -509,12 +534,12 @@ impl InstallationsData {
             Self::helper_unpack(&downloaded_zip, &unzip_location),
             cleanup!
         );
-        let hash = &commit_full[..13];
+        let nice_name = &commit_full[..13];
         // removing dir already added to cleanup
 
         // check if already installed, maybe without viewer
         for (i, ver) in self.versions.iter().enumerate() {
-            if ver.hash == hash && (ver.has_viewer || !do_install_viewer) {
+            if ver.commit == commit_full && (ver.has_viewer || !do_install_viewer) {
                 println!("latest commit already downloaded!");
                 cleanup!();
                 return Ok(i);
@@ -522,7 +547,7 @@ impl InstallationsData {
         }
 
         // install
-        let dest_dir = self.base_path.join(&hash);
+        let dest_dir = self.base_path.join(&nice_name);
         wraperr!("install phase", self.helper_install(&unzip_location, &dest_dir, do_install_viewer), cleanup!);
 
         // println!("imitating error!");
@@ -547,7 +572,7 @@ impl InstallationsData {
 
         helper_save_metadata(
             &dest_dir.join("meta.info"),
-            &hash,
+            &nice_name,
             &commit_full,
             date.into(),
         )?;
@@ -558,7 +583,8 @@ impl InstallationsData {
             &mut self.versions,
             InstalledVersion {
                 path: dest_dir,
-                hash: hash.to_owned(),
+                nice_name: nice_name.to_owned(),
+                commit: commit_full,
                 date,
                 has_viewer: do_install_viewer,
             },
@@ -692,14 +718,14 @@ impl InstallationsData {
         let reader = BufReader::new(match File::open(zip_file) {
             Ok(x) => x,
             Err(e) => {
-                // TODO: cleanup
+                // nothing to cleanup
                 return Err(e);
             }
         });
         let mut zip_reader = match ZipArchive::new(reader) {
             Ok(x) => x,
             Err(e) => {
-                // TODO: cleanup
+                // nothing to cleanup
                 return Err(Error::new(
                     std::io::ErrorKind::Other,
                     format!("failed to read back zip file: {}", e),
@@ -729,8 +755,10 @@ impl InstallationsData {
             }
         };
 
+        // actual unzip
         if let Err(e) = zip_reader.extract(unzip_location) {
-            // TODO: cleanup
+            // cleanup partially unzipped stuff ?
+            // for now it's left to the caller to cleanup
             return Err(Error::new(
                 std::io::ErrorKind::Other,
                 format!("unzip failed: {}", e),
@@ -1311,7 +1339,7 @@ impl InstallationsData {
 ///
 fn helper_save_metadata(
     info_file_path: &Path,
-    commit_short: &str,
+    comment: &str,
     commit_full: &str,
     date: DateTime<Utc>,
 ) -> Result<(), Error> {
@@ -1326,7 +1354,7 @@ fn helper_save_metadata(
     };
 
     write!(file, "1\n")?;
-    write!(file, "{}\n", commit_short)?;
+    write!(file, "{}\n", comment)?;
     write!(file, "{}\n", commit_full)?;
     write!(file, "{:?}", date)?;
 
@@ -1337,6 +1365,7 @@ fn helper_save_metadata(
 /// helper func
 ///
 /// read back previously saved metadata file
+/// returned values are: nice_name, source commit, date of creation
 ///
 fn helper_read_metadata(info_file_path: &Path) -> Result<(String, String, DateTime<Utc>), Error> {
     let mut file = match fs::File::open(info_file_path) {
@@ -1360,7 +1389,7 @@ fn helper_read_metadata(info_file_path: &Path) -> Result<(String, String, DateTi
 
     buf.clear();
     file.read_line(&mut buf)?;
-    let commit_short = buf.trim().to_owned();
+    let comment = buf.trim().to_owned();
 
     buf.clear();
     file.read_line(&mut buf)?;
@@ -1377,5 +1406,5 @@ fn helper_read_metadata(info_file_path: &Path) -> Result<(String, String, DateTi
         ));
     };
 
-    Ok((commit_short, commit_full, date))
+    Ok((comment, commit_full, date))
 }
