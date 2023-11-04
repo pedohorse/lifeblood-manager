@@ -2,7 +2,7 @@ use lifeblood_manager::InstallationsData;
 use std::{
     env::{self, Args},
     io::Error,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 const MAIN_HELP_MESSAGE: &str = "\
@@ -150,7 +150,7 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
                 std::process::exit(2);
             }
         }
-    };
+    }
 
     let mut installs = help_get_installs_from_dir(base_path);
 
@@ -168,7 +168,6 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
     Ok(())
 }
 
-
 fn list_installs(installs: &InstallationsData) {
     println!("valid base path: {:?}", installs.base_path());
     if installs.is_base_path_tainted() {
@@ -178,14 +177,15 @@ fn list_installs(installs: &InstallationsData) {
     println!("");
     for (i, ver) in installs.iter_versions().enumerate().rev() {
         println!(
-            "{} | {} | {}",
+            "{} | {} | {} | {}",
             if installs.current_version_index() == i {
                 "current"
             } else {
                 "       "
             },
-            ver.source_commit_hash(),
-            ver.date().format("%d-%m-%Y %H:%M:%S").to_string()
+            ver.nice_name(),
+            ver.date().format("%d-%m-%Y %H:%M:%S").to_string(),
+            ver.source_commit(),
         );
     }
 }
