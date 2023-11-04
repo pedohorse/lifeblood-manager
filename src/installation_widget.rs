@@ -1,6 +1,7 @@
 use crate::theme::*;
 use crate::widgets::Widget;
 use crate::InstallationsData;
+use crate::info_dialog::InfoDialog;
 use fltk::dialog;
 use fltk::enums::{CallbackTrigger, LabelType};
 use fltk::misc::InputChoice;
@@ -361,8 +362,9 @@ impl Widget for InstallationWidget {
             
             if let Err(e) = install_data.rename_version(ver_id, new_name) {
                 eprintln!("failed to rename! {}", e);
-                dialog::alert(popup_x, popup_y, &format!("failed to rename! {}", e));
+                InfoDialog::show(popup_x, popup_y, &format!("failed to rename! {}", e));
             }
+            
             guard.installation_table.redraw();
         });
 
@@ -439,7 +441,7 @@ impl Widget for InstallationWidget {
                     Ok(Err(err_msg)) => {
                         eprintln!("{}", err_msg);
                         let wind = btn.window().unwrap();
-                        dialog::alert(
+                        InfoDialog::show(
                             wind.x() + (wind.w() / 2) as i32 - 300,
                             wind.y() + (wind.h() / 2) as i32 - 100,
                             &err_msg,

@@ -11,3 +11,5 @@ pub mod theme;
 pub use installation_widget::InstallationWidget;
 #[cfg(feature = "ui")]
 pub use widgets::Widget;
+#[cfg(feature = "ui")]
+mod info_dialog;
