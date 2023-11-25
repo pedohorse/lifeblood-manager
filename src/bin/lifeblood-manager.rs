@@ -1,6 +1,111 @@
-use fltk::{app, group::Tabs, prelude::*, window::Window};
-use lifeblood_manager::{InstallationWidget, Widget, theme::*};
+use fltk::{
+    app, button::Button, dialog::NativeFileChooser, frame::Frame, group::Flex, group::Tabs,
+    input::FileInput, prelude::*, window::Window,
+};
+use lifeblood_manager::{theme::*, InstallationWidget, LaunchWidget, Widget, WidgetCallbacks};
 use std::env::current_dir;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+pub struct MainWidget {
+    base_path_input: FileInput,
+    sub_widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>>,
+}
+
+impl MainWidget {
+    /// interface initialization helpers
+    fn init_base_path_input() -> (Button, FileInput, Flex) {
+        let mut base_input_flex = Flex::default().row();
+        base_input_flex.fixed(&Frame::default().with_label("base directory"), 120);
+        let mut base_input = FileInput::default();
+        let mut browse_button = Button::default().with_label("browse");
+        base_input_flex.fixed(&browse_button, 64);
+        base_input_flex.end();
+
+        (browse_button, base_input, base_input_flex)
+    }
+
+    pub fn new(path: &PathBuf) -> Arc<Mutex<Self>> {
+        let mut flex = Flex::default_fill().column();
+        // one shared install location
+        // base path input
+        let (mut browse_button, base_input, base_input_flex) = Self::init_base_path_input();
+        flex.fixed(&base_input_flex, ITEM_HEIGHT);
+
+        let path_warning_label = Frame::default().with_label("");
+        flex.fixed(&path_warning_label, ITEM_HEIGHT);
+        //
+        let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
+        
+        let mut tabs = Tabs::default_fill();
+        let install_widget = InstallationWidget::initialize();
+        let launch_widget = LaunchWidget::initialize();
+        tabs.end();
+
+        install_widget
+            .lock()
+            .unwrap()
+            .change_install_dir(path)
+            .unwrap_or_else(|_| {
+                println!("no versions found in cwd");
+            });
+        widgets.push(install_widget);
+        widgets.push(launch_widget);
+
+        flex.end();
+
+        tabs.auto_layout();
+
+        let mut widget = Arc::new(Mutex::new(MainWidget {
+            base_path_input: base_input,
+            sub_widgets: widgets,
+        }));
+
+        // callbacks
+
+        // base path input change callback
+        let widget_to_cb = widget.clone();
+        widget
+            .lock()
+            .expect("impossible during init")
+            .base_path_input
+            .set_callback(move |input| {
+                widget_to_cb
+                    .lock()
+                    .unwrap()
+                    .change_install_dir(PathBuf::from(input.value()));
+            });
+
+        // file dialog chooser callback
+        let widget_to_cb = widget.clone();
+        browse_button.set_callback(move |_| {
+            let mut dialog = NativeFileChooser::new(fltk::dialog::NativeFileChooserType::BrowseDir);
+            dialog.show();
+            let input_path = dialog.filename();
+            let input_str = &input_path.to_string_lossy();
+            if input_str != "" {
+                //base_input_rc_callback.borrow_mut().set_value(input_str);
+                widget_to_cb
+                    .lock()
+                    .unwrap()
+                    .change_install_dir(input_path);
+            }
+        });
+
+        widget
+    }
+
+    pub fn change_install_dir(&mut self, new_path: PathBuf) {
+        // update input
+        self.base_path_input.set_value(&new_path.to_string_lossy());
+        for widget_to_cb in self.sub_widgets.iter_mut() {
+            widget_to_cb
+                .lock()
+                .unwrap()
+                .install_location_changed(&new_path);
+        }
+    }
+}
 
 fn main() {
     let current_dir = if let Ok(d) = current_dir() {
@@ -16,21 +121,14 @@ fn main() {
     app::set_selection_color(SEL_COLOR[0], SEL_COLOR[1], SEL_COLOR[2]);
     app::set_visible_focus(false);
 
-    let mut wind = Window::default().with_size(650, 400).with_label("Lifeblood Manager");
-    let mut tabs = Tabs::default_fill();
+    let mut wind = Window::default()
+        .with_size(650, 400)
+        .with_label("Lifeblood Manager");
 
-    let install_widget = InstallationWidget::initialize();
-    install_widget
-        .lock()
-        .unwrap()
-        .change_install_dir(current_dir)
-        .unwrap_or_else(|_| {
-            println!("no versions found in cwd");
-        });
+    MainWidget::new(&current_dir);
 
-    tabs.end();
-    tabs.auto_layout();
     wind.end();
+
     wind.make_resizable(true);
     wind.show();
     app.run().unwrap();

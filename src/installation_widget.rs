@@ -1,5 +1,5 @@
 use crate::theme::*;
-use crate::widgets::Widget;
+use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
 use fltk::dialog;
@@ -24,7 +24,6 @@ use std::{
 };
 use std::{sync::Arc, thread, time::Duration};
 
-const ITEM_HEIGHT: i32 = 32;
 const DEFAULT_BRANCH: &str = "dev";
 
 const DOWNLOAD_LABEL_ANIM: [&str; 12] = [
@@ -44,14 +43,13 @@ const DOWNLOAD_LABEL_ANIM: [&str; 12] = [
 
 pub struct InstallationWidget {
     install_data: Option<InstallationsData>,
-    base_path_input: FileInput,
     installation_table: Table,
     warning_label: Frame,
     main_flex: Flex,
 }
 
 impl InstallationWidget {
-    pub fn change_install_dir(&mut self, new_path: PathBuf) -> Result<(), std::io::Error> {
+    pub fn change_install_dir(&mut self, new_path: &PathBuf) -> Result<(), std::io::Error> {
         let new_data = match InstallationsData::from_dir(new_path.clone()) {
             Ok(x) => x,
             Err(e) => {
@@ -59,9 +57,6 @@ impl InstallationWidget {
                 return Err(e);
             }
         };
-
-        // update input
-        self.base_path_input.set_value(&new_path.to_string_lossy());
 
         if new_data.is_base_path_tainted() {
             self.warning_label.set_label(
@@ -91,29 +86,22 @@ impl InstallationWidget {
         }
     }
 
-    /// interface initialization helpers
-    fn init_base_path_input() -> (Button, FileInput, Flex) {
-        let mut base_input_flex = Flex::default().row();
-        base_input_flex.fixed(&Frame::default().with_label("base directory"), 120);
-        let mut base_input = FileInput::default();
-        let mut browse_button = Button::default().with_label("browse");
-        base_input_flex.fixed(&browse_button, 64);
-        base_input_flex.end();
+}
 
-        (browse_button, base_input, base_input_flex)
+impl WidgetCallbacks for InstallationWidget {
+    fn install_location_changed(&mut self, path: &PathBuf){
+        self.change_install_dir(path).unwrap_or_else(|_| {
+            println!("failed to set path to {:?}", path);
+        })
     }
 }
 
 impl Widget for InstallationWidget {
     fn initialize() -> Arc<Mutex<Self>> {
-        let mut tab_header = Flex::default_fill().with_label("installation\t").row();
+        let mut tab_header = Flex::default_fill().with_label("Installation\t").row();
         let mut flex = Flex::default_fill().column();
         flex.set_margin(8);
         flex.set_spacing(16);
-
-        // base path input
-        let (mut browse_button, base_input, base_input_flex) = Self::init_base_path_input();
-        flex.fixed(&base_input_flex, ITEM_HEIGHT);
 
         let path_warning_label = Frame::default().with_label("");
         flex.fixed(&path_warning_label, ITEM_HEIGHT);
@@ -154,7 +142,6 @@ impl Widget for InstallationWidget {
 
         let widget = InstallationWidget {
             install_data: None,
-            base_path_input: base_input,
             installation_table: installations_table,
             warning_label: path_warning_label,
             main_flex: flex,
@@ -165,40 +152,6 @@ impl Widget for InstallationWidget {
         //
         // callbacks
         //
-        // base path input change callback
-        let widget_to_cb = widget.clone();
-        widget
-            .lock()
-            .expect("impossible during init")
-            .base_path_input
-            .set_callback(move |input| {
-                widget_to_cb
-                    .lock()
-                    .unwrap()
-                    .change_install_dir(PathBuf::from(input.value()))
-                    .unwrap_or_else(|_| {
-                        println!("callback failed to set path");
-                    });
-            });
-
-        // file dialog chooser callback
-        let widget_to_cb = widget.clone();
-        browse_button.set_callback(move |_| {
-            let mut dialog = NativeFileChooser::new(fltk::dialog::NativeFileChooserType::BrowseDir);
-            dialog.show();
-            let input_path = dialog.filename();
-            let input_str = &input_path.to_string_lossy();
-            if input_str != "" {
-                //base_input_rc_callback.borrow_mut().set_value(input_str);
-                widget_to_cb
-                    .lock()
-                    .unwrap()
-                    .change_install_dir(input_path)
-                    .unwrap_or_else(|_| {
-                        println!("callback failed to set path");
-                    });
-            }
-        });
 
         // table draw callback
         let widget_to_cb = widget.clone();
