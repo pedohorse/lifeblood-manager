@@ -6,7 +6,6 @@ use std::io::{BufReader, Error};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
-use std::thread::current;
 use std::{env, fs};
 
 use downloader::{Download, Downloader};

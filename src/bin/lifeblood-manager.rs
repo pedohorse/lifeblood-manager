@@ -2,7 +2,7 @@ use fltk::{
     app, button::Button, dialog::NativeFileChooser, frame::Frame, group::Flex, group::Tabs,
     input::FileInput, prelude::*, window::Window,
 };
-use lifeblood_manager::{theme::*, InstallationWidget, LaunchWidget, Widget, WidgetCallbacks};
+use lifeblood_manager::{theme::*, InstallationWidget, LaunchWidget, Widget, WidgetCallbacks, InstallationsData};
 use std::env::current_dir;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 pub struct MainWidget {
     base_path_input: FileInput,
     sub_widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>>,
+    install_data: Option<Arc<Mutex<InstallationsData>>>,
 }
 
 impl MainWidget {
@@ -37,28 +38,27 @@ impl MainWidget {
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
         
-        let mut tabs = Tabs::default_fill();
-        let install_widget = InstallationWidget::initialize();
-        let launch_widget = LaunchWidget::initialize();
-        tabs.end();
+        let mut tabs = Tabs::default_fill();//.with_size(128, 111);
+        let (install_widget, _) = InstallationWidget::initialize();
+        let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
 
-        install_widget
-            .lock()
-            .unwrap()
-            .change_install_dir(path)
-            .unwrap_or_else(|_| {
-                println!("no versions found in cwd");
-            });
+        tabs.end();
+        tabs.resizable(&tab_header_flex);
+        for c in tabs.clone().into_iter() {
+            if let Some(mut c) = c.as_group() {
+                c.resize(tabs.x(), tabs.y() + 30, tabs.w(), tabs.h() - 30);
+            }
+        }
+
         widgets.push(install_widget);
         widgets.push(launch_widget);
 
         flex.end();
 
-        tabs.auto_layout();
-
         let mut widget = Arc::new(Mutex::new(MainWidget {
             base_path_input: base_input,
             sub_widgets: widgets,
+            install_data: None,
         }));
 
         // callbacks
@@ -73,7 +73,7 @@ impl MainWidget {
                 widget_to_cb
                     .lock()
                     .unwrap()
-                    .change_install_dir(PathBuf::from(input.value()));
+                    .change_install_dir(&PathBuf::from(input.value()));
             });
 
         // file dialog chooser callback
@@ -88,21 +88,34 @@ impl MainWidget {
                 widget_to_cb
                     .lock()
                     .unwrap()
-                    .change_install_dir(input_path);
+                    .change_install_dir(&input_path);
             }
         });
+
+        // lastly, initialize
+        widget
+            .lock()
+            .unwrap()
+            .change_install_dir(path);
 
         widget
     }
 
-    pub fn change_install_dir(&mut self, new_path: PathBuf) {
+    pub fn change_install_dir(&mut self, new_path: &PathBuf) {
         // update input
+        self.install_data = match InstallationsData::from_dir(new_path.clone()) {
+            Ok(x) => Some(Arc::new(Mutex::new(x))),
+            _ => {
+                println!("no versions found");
+                None
+            }
+        };
         self.base_path_input.set_value(&new_path.to_string_lossy());
         for widget_to_cb in self.sub_widgets.iter_mut() {
             widget_to_cb
                 .lock()
                 .unwrap()
-                .install_location_changed(&new_path);
+                .install_location_changed(&new_path, self.install_data.as_ref());
         }
     }
 }
