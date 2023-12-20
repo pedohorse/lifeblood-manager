@@ -1,4 +1,5 @@
 mod installation_data;
+mod proc;
 pub use installation_data::{InstallationsData, InstalledVersion};
 
 #[cfg(feature = "ui")]

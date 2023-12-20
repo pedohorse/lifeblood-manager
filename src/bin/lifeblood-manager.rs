@@ -18,8 +18,8 @@ impl MainWidget {
     fn init_base_path_input() -> (Button, FileInput, Flex) {
         let mut base_input_flex = Flex::default().row();
         base_input_flex.fixed(&Frame::default().with_label("base directory"), 120);
-        let mut base_input = FileInput::default();
-        let mut browse_button = Button::default().with_label("browse");
+        let base_input = FileInput::default();
+        let browse_button = Button::default().with_label("browse");
         base_input_flex.fixed(&browse_button, 64);
         base_input_flex.end();
 
@@ -38,7 +38,7 @@ impl MainWidget {
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
         
-        let mut tabs = Tabs::default_fill();//.with_size(128, 111);
+        let tabs = Tabs::default_fill();//.with_size(128, 111);
         let (install_widget, _) = InstallationWidget::initialize();
         let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
 
@@ -55,7 +55,7 @@ impl MainWidget {
 
         flex.end();
 
-        let mut widget = Arc::new(Mutex::new(MainWidget {
+        let widget = Arc::new(Mutex::new(MainWidget {
             base_path_input: base_input,
             sub_widgets: widgets,
             install_data: None,
