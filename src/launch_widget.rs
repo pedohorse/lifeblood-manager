@@ -32,8 +32,9 @@ impl LaunchedProcess {
 struct ControlButtonsData {
     process: Option<LaunchedProcess>,
     command_name: String,
-    current_installation: Arc<Mutex<InstallationsData>>,
+    current_installation: Option<Arc<Mutex<InstallationsData>>>,
     last_run_exit_code: Option<i32>,
+    current_installation_changed_callback: Option<Box<dyn FnMut(Option<&InstallationsData>) -> ()>>,  // arg will be new and prev installations data
 }
 
 impl ControlButtonsData {
@@ -44,14 +45,19 @@ impl ControlButtonsData {
         ControlButtonsData {
             process: None,
             command_name: command_name.to_owned(),
-            current_installation: installations.clone(),
+            current_installation: if let Some(x) = installations {
+                Some(x.clone())
+            } else {
+                None
+            },
             last_run_exit_code: None,
+            current_installation_changed_callback: None,
         }
     }
 }
 
 pub struct LaunchWidget {
-    scheduler_launch_data: ControlButtonsData
+    scheduler_launch_data: Rc<RefCell<ControlButtonsData>>,
 }
 
 impl WidgetCallbacks for LaunchWidget {
@@ -60,7 +66,25 @@ impl WidgetCallbacks for LaunchWidget {
         path: &PathBuf,
         install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) {
-        //self.base_path = path.to_owned();
+        let mut launch_data = self.scheduler_launch_data.borrow_mut();
+        
+        let prev_installations_data = std::mem::replace(&mut launch_data.current_installation, if let Some(installations) = install_data {
+            Some(installations.clone())
+        } else {
+            None
+        });
+
+        let mut callback_maybe = std::mem::replace(&mut launch_data.current_installation_changed_callback, None);
+        drop(launch_data);
+        if let Some(ref mut callback) = callback_maybe {
+            //let prev_data = 
+            if let Some(ref x) = prev_installations_data {
+                callback(Some(&x.lock().expect("failed to lock")));
+            }else{
+                callback(None);
+            };
+        };
+        self.scheduler_launch_data.borrow_mut().current_installation_changed_callback = callback_maybe;
     }
 }
 
@@ -71,9 +95,12 @@ impl Widget for LaunchWidget {
         flex.set_margin(8);
         flex.set_spacing(16);
 
-        let scheduler_launch_data = ControlButtonsData::new(installations, command_name)
-        let mut widget = LaunchWidget {};
-        widget.make_launch_buttons(&mut flex);
+        let scheduler_launch_data =
+            Rc::new(RefCell::new(ControlButtonsData::new(None, "foo test")));
+        let mut widget = LaunchWidget {
+            scheduler_launch_data: scheduler_launch_data.clone(),
+        };
+        widget.make_launch_buttons(&mut flex, scheduler_launch_data);
 
         flex.end();
         tab_header.end();
@@ -83,9 +110,11 @@ impl Widget for LaunchWidget {
 }
 
 impl LaunchWidget {
-    fn make_launch_buttons(&mut self, parent_group: &mut Flex, control_data: ControlButtonsData) {
-        let control_data = Rc::new(RefCell::new(control_data));
-
+    fn make_launch_buttons(
+        &mut self,
+        parent_group: &mut Flex,
+        control_data: Rc<RefCell<ControlButtonsData>>,
+    ) {
         let flex = Flex::default_fill().row();
         parent_group.fixed(&flex, 64);
 
@@ -101,6 +130,12 @@ impl LaunchWidget {
         info_box.end();
 
         flex.end();
+
+        // init state
+        stop_button.deactivate();
+        if let None = control_data.borrow_mut().current_installation {
+            start_button.deactivate();
+        }
 
         // ui callbacks
         let control_data_ref = control_data.clone();
@@ -123,8 +158,8 @@ impl LaunchWidget {
                     data.last_run_exit_code = Some(exit_code);
 
                     match exit_code {
-                        0 => status_label_cl.set_label("finished"),
-                        -1 => status_label_cl.set_label("general error"),
+                        0 => status_label_cl.set_label("finished OK"),
+                        -1 => status_label_cl.set_label("unhandled signal"),
                         1 => status_label_cl.set_label("generic error"),
                         2 => status_label_cl.set_label("argument error"),
                         x => status_label_cl.set_label(&format!("error code: {}", x)),
@@ -145,20 +180,27 @@ impl LaunchWidget {
         let mut start_button_cl = start_button.clone();
         let mut stop_button_cl = stop_button.clone();
         let mut status_label_cl = status_label.clone();
-        start_button.set_callback(move |button| {
+        start_button.set_callback(move |_| {
             let mut data = control_data_ref.borrow_mut();
             if let Some(_) = data.process {
                 eprintln!("start button: process already started!");
                 return;
             }
-            data.process =
-                match LaunchedProcess::new(&data.current_installation, "foo", &vec!["hmm..."]) {
-                    Ok(p) => Some(p),
-                    Err(e) => {
-                        eprintln!("failed to start process! {:?}", e);
-                        return;
+
+            data.process = match data.current_installation {
+                Some(ref installations) => {
+                    match LaunchedProcess::new(installations, "./foo", &vec!["hmm..."]) {
+                        Ok(p) => Some(p),
+                        Err(e) => {
+                            eprintln!("failed to start process! {:?}", e);
+                            return;
+                        }
                     }
-                };
+                }
+                None => {
+                    return;
+                }
+            };
             start_button_cl.deactivate();
             stop_button_cl.activate();
             status_label_cl.set_label("running");
@@ -178,5 +220,28 @@ impl LaunchWidget {
                 stop_button_cl.deactivate();
             };
         });
+        
+        let control_data_ref = control_data.clone();
+        control_data.borrow_mut().current_installation_changed_callback = Some(Box::new(move |old_install_data_maybe| {
+            let data = control_data_ref.borrow();
+            if let Some(_) = data.process {
+                // leave state change up to process finalizing
+                return;
+            }
+
+            if let Some(_) = old_install_data_maybe {
+                if let None = data.current_installation {
+                    start_button.deactivate();
+                    stop_button.activate();
+                    status_label.set_label("invalid");
+                }
+            } else {
+                if let Some(_) = data.current_installation {
+                    start_button.activate();
+                    stop_button.deactivate();
+                    status_label.set_label("ready");
+                }
+            }
+        }));
     }
 }
