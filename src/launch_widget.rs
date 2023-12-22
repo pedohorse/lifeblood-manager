@@ -5,6 +5,7 @@ use crate::InstallationsData;
 use fltk::button::Button;
 use fltk::{app, frame::Frame, group::Flex, prelude::*};
 use std::cell::RefCell;
+use std::ffi::OsStr;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -221,7 +222,7 @@ impl LaunchWidget {
                 Some(ref installations) => {
                     match LaunchedProcess::new(installations, &data.command, &data.args) {
                         Ok(p) => {
-                            info_label_running_root_cl.set_label(&installations.lock().unwrap().base_path().to_string_lossy());
+                            info_label_running_root_cl.set_label(&installations.lock().unwrap().base_path().file_name().unwrap_or(OsStr::new("unknown")).to_string_lossy());
                             Some(p)
                         },
                         Err(e) => {
