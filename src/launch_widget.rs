@@ -7,7 +7,7 @@ use fltk::{app, frame::Frame, group::Flex, prelude::*};
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::io;
-use std::path::PathBuf;
+use std::path::{PathBuf, Component};
 use std::process::{Child, Command};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -154,7 +154,10 @@ impl LaunchWidget {
 
         let info_box = Flex::default_fill().column();
         Frame::default().with_label(&control_data.borrow().command_label);
+        let mut info_label1 = Flex::default_fill().row();
+        info_label1.fixed(&Frame::default().with_label("base:"), 48);
         let info_label_running_root = Frame::default().with_label("not running");
+        info_label1.end();
         info_box.end();
 
         flex.end();
@@ -222,7 +225,17 @@ impl LaunchWidget {
                 Some(ref installations) => {
                     match LaunchedProcess::new(installations, &data.command, &data.args) {
                         Ok(p) => {
-                            info_label_running_root_cl.set_label(&installations.lock().unwrap().base_path().file_name().unwrap_or(OsStr::new("unknown")).to_string_lossy());
+                            info_label_running_root_cl.set_label(
+                                &installations.lock().unwrap().base_path()
+                                    .components()
+                                    .rev()
+                                    .take(2)
+                                    .collect::<Vec<Component>>()
+                                    .into_iter()
+                                    .rev()
+                                    .collect::<PathBuf>()
+                                    .to_string_lossy()
+                            );
                             Some(p)
                         },
                         Err(e) => {
