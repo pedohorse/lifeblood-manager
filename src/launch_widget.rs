@@ -1,4 +1,4 @@
-use crate::launch_data::ControlButtonsData;
+use crate::launch_data::LaunchControlData;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
@@ -9,9 +9,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 pub struct LaunchWidget {
-    scheduler_launch_data: Rc<RefCell<ControlButtonsData>>,
-    worker_pool_launch_data: Rc<RefCell<ControlButtonsData>>,
-    viewer_launch_data: Rc<RefCell<ControlButtonsData>>,
+    scheduler_launch_data: Rc<RefCell<LaunchControlData>>,
+    worker_pool_launch_data: Rc<RefCell<LaunchControlData>>,
+    viewer_launch_data: Rc<RefCell<LaunchControlData>>,
 }
 
 impl WidgetCallbacks for LaunchWidget {
@@ -39,19 +39,19 @@ impl Widget for LaunchWidget {
         flex.set_margin(8);
         flex.set_spacing(16);
 
-        let scheduler_launch_data = Rc::new(RefCell::new(ControlButtonsData::new(
+        let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Scheduler",
             "./lifeblood",
             vec!["scheduler"],
         )));
-        let wpool_launch_data = Rc::new(RefCell::new(ControlButtonsData::new(
+        let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Worker Pool",
             "./lifeblood",
             vec!["pool", "simple"],
         )));
-        let viewer_launch_data = Rc::new(RefCell::new(ControlButtonsData::new(
+        let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Viewer",
             "./lifeblood_viewer",
@@ -77,7 +77,7 @@ impl LaunchWidget {
     fn make_launch_buttons(
         &mut self,
         parent_group: &mut Flex,
-        control_data: Rc<RefCell<ControlButtonsData>>,
+        control_data: Rc<RefCell<LaunchControlData>>,
     ) {
         let flex = Flex::default_fill().row();
         parent_group.fixed(&flex, 64);

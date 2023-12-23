@@ -2,7 +2,7 @@ use crate::running_process_data::LaunchedProcess;
 use crate::InstallationsData;
 use std::{sync::{Arc, Mutex, MutexGuard}, io, process::ExitStatus};
 
-pub struct ControlButtonsData {
+pub struct LaunchControlData {
     _process: Option<LaunchedProcess>,
     _command_label: String,
     _command: String,
@@ -10,17 +10,17 @@ pub struct ControlButtonsData {
     _current_installation: Option<Arc<Mutex<InstallationsData>>>,
     _last_run_exit_code: Option<i32>,
     _current_installation_changed_callback:
-        Option<Box<dyn FnMut(&ControlButtonsData, Option<&InstallationsData>) -> ()>>, // arg will be new and prev installations data
+        Option<Box<dyn FnMut(&LaunchControlData, Option<&InstallationsData>) -> ()>>, // arg will be new and prev installations data
 }
 
-impl ControlButtonsData {
+impl LaunchControlData {
     pub fn new(
         installations: Option<&Arc<Mutex<InstallationsData>>>,
         command_label: &str,
         command: &str,
         args: Vec<&str>,
-    ) -> ControlButtonsData {
-        ControlButtonsData {
+    ) -> LaunchControlData {
+        LaunchControlData {
             _process: None,
             _command_label: command_label.to_owned(),
             _command: command.to_owned(),
@@ -65,7 +65,7 @@ impl ControlButtonsData {
         self._current_installation_changed_callback = callback_maybe;
     }
 
-    pub fn set_install_location_changed_callback(&mut self, callback: Option<Box<dyn FnMut(&ControlButtonsData, Option<&InstallationsData>) -> ()>>) {
+    pub fn set_install_location_changed_callback(&mut self, callback: Option<Box<dyn FnMut(&LaunchControlData, Option<&InstallationsData>) -> ()>>) {
         self._current_installation_changed_callback = callback;
     }
 
@@ -108,7 +108,22 @@ impl ControlButtonsData {
                 }
                 status_maybe
             }
-            None => Ok(None)
+            None => Err(io::Error::new(io::ErrorKind::Other, "not started"))
+        }
+    }
+
+    pub fn wait(&mut self) -> io::Result<ExitStatus> {
+        match self._process {
+            Some(ref mut proc) => {
+                let status = proc.wait();
+                if let Ok(exit_status) = status {
+                    self._process = None;
+                    let exit_code = exit_status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
+                    self._last_run_exit_code = Some(exit_code);
+                }
+                status
+            }
+            None => Err(io::Error::new(io::ErrorKind::Other, "not started"))
         }
     }
 
@@ -139,5 +154,9 @@ impl ControlButtonsData {
 
     pub fn command_label(&self) -> &str {
         &self._command_label
+    }
+
+    pub fn last_run_exit_code(&self) -> Option<i32> {
+        self._last_run_exit_code
     }
 }
