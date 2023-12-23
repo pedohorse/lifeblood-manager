@@ -103,8 +103,8 @@ impl LaunchControlData {
                 let status_maybe = proc.try_wait();
                 if let Ok(Some(exit_status)) = status_maybe {
                     self._process = None;
-                    let exit_code = exit_status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
-                    self._last_run_exit_code = Some(exit_code);
+                    let exit_code = exit_status.code();
+                    self._last_run_exit_code = exit_code;
                 }
                 status_maybe
             }
@@ -118,8 +118,8 @@ impl LaunchControlData {
                 let status = proc.wait();
                 if let Ok(exit_status) = status {
                     self._process = None;
-                    let exit_code = exit_status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
-                    self._last_run_exit_code = Some(exit_code);
+                    let exit_code = exit_status.code();
+                    self._last_run_exit_code = exit_code;
                 }
                 status
             }

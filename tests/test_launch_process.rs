@@ -1,4 +1,4 @@
-use lifeblood_manager::{InstallationsData, LaunchControlData, LaunchedProcess};
+use lifeblood_manager::{InstallationsData, LaunchedProcess};
 use std::matches;
 use std::path::PathBuf;
 use std::thread;
@@ -15,11 +15,23 @@ fn test_launchedprocess_run_wait_till_finishes_err() {
 }
 
 #[test]
+fn test_launchedprocess_run_wait_till_finishes_arg() {
+    for i in [1, 2, 3, 5, 7, 12] {
+        launch_test_helper("./proc_exit_arg", &vec![i.to_string()], Ok(Some(i)), -1.);
+    }
+}
+
+#[test]
 fn test_launchedprocess_run_terminate() {
     launch_test_helper("./proc_exit_clean", &vec![], Ok(None), 0.5);
 }
 
-fn launch_test_helper(program: &str, args: &Vec<String>, expected_result: Result<Option<i32>, ()>, send_term_after: f32) {
+fn launch_test_helper(
+    program: &str,
+    args: &Vec<String>,
+    expected_result: Result<Option<i32>, ()>,
+    send_term_after: f32,
+) {
     let installs =
         if let Ok(x) = InstallationsData::from_dir(PathBuf::from("./tests/data/l_struct1")) {
             x
