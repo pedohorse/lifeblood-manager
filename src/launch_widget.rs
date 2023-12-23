@@ -179,35 +179,7 @@ impl LaunchWidget {
                     return;
                 }
             };
-            // data.process = match data.current_installation {
-            //     Some(ref installations) => {
-            //         match LaunchedProcess::new(installations, &data.command, &data.args) {
-            //             Ok(p) => {
-            //                 info_label_running_root_cl.set_label(
-            //                     &installations.lock().unwrap().base_path()
-            //                         .components()
-            //                         .rev()
-            //                         .take(2)
-            //                         .collect::<Vec<Component>>()
-            //                         .into_iter()
-            //                         .rev()
-            //                         .collect::<PathBuf>()
-            //                         .to_string_lossy()
-            //                 );
-            //                 Some(p)
-            //             },
-            //             Err(e) => {
-            //                 eprintln!("failed to start process! {:?}", e);
-            //                 let err = format!("🔴 failed to start {}: {}", data.command, e.kind());
-            //                 status_label_cl.set_label(&err);
-            //                 return;
-            //             }
-            //         }
-            //     }
-            //     None => {
-            //         return;
-            //     }
-            // };
+
             start_button_cl.deactivate();
             stop_button_cl.activate();
             status_label_cl.set_label("🟢 running");
