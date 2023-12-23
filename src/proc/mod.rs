@@ -1,7 +1,7 @@
 #[cfg(windows)]
 mod win;
 #[cfg(windows)]
-pub use win::create_process;
+pub use win::{create_process, terminate_child};
 
 #[cfg(unix)]
 mod unix;
