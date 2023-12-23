@@ -1,6 +1,7 @@
 use std::{
     io,
     os::windows::process::CommandExt,
+    path::Path,
     process::{Command, Child},
 };
 use winconsole::console::generate_ctrl_event;
@@ -10,10 +11,11 @@ const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;  // This is needed for pid to 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 
-pub fn create_process(program: &str, args: &Vec<&str>) -> io::Result<Child> {
+pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Result<Child> {
     Command::new(program)
-        .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
+        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
         .args(args)
+        .current_dir(cwd)
         .spawn()
 }
 
