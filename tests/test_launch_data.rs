@@ -8,24 +8,24 @@ use std::time::Duration;
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes() {
-    launch_test_helper("./proc_exit_clean", vec![], Ok(Some(0)), -1.);
+    launch_test_helper(if cfg!(unix) { "./proc_exit_clean" } else { "proc_exit_clean.cmd" }, vec![], Ok(Some(0)), -1.);
 }
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes_err() {
-    launch_test_helper("./proc_exit_1", vec![], Ok(Some(1)), -1.);
+    launch_test_helper(if cfg!(unix) { "./proc_exit_1" } else { "proc_exit_1.cmd" }, vec![], Ok(Some(1)), -1.);
 }
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes_arg() {
     for i in [1, 2, 3, 5, 7, 12] {
-        launch_test_helper("./proc_exit_arg", vec![&i.to_string()], Ok(Some(i)), -1.);
+        launch_test_helper(if cfg!(unix) { "./proc_exit_arg" } else { "proc_exit_arg.cmd" }, vec![&i.to_string()], Ok(Some(i)), -1.);
     }
 }
 
 #[test]
 fn test_launchedprocess_run_terminate() {
-    launch_test_helper("./proc_exit_clean", vec![], Ok(None), 0.5);
+    launch_test_helper(if cfg!(unix) { "./proc_exit_clean" } else { "proc_exit_clean.cmd" }, vec![], Ok(None), 0.5);
 }
 
 fn launch_test_helper(
@@ -49,8 +49,8 @@ fn launch_test_helper(
     assert!(launch_data.is_current_installation_set());
 
     assert!(!launch_data.is_process_running());
-    if let Err(_) = launch_data.start_process() {
-        panic!("failed to start test process");
+    if let Err(e) = launch_data.start_process() {
+        panic!("failed to start test process: {:?}", e);
     }
     // sure we rely here on process not finishing yet, but process should take whole 2 sec to finish
     assert!(launch_data.is_process_running());
