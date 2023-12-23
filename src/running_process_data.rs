@@ -1,25 +1,23 @@
 use crate::proc::{create_process, terminate_child};
-use crate::InstallationsData;
 use std::io;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ExitStatus};
-use std::sync::{Arc, Mutex};
 
 pub struct LaunchedProcess {
     running_process: Child,
-    original_installation: Arc<Mutex<InstallationsData>>,
+    original_installation_path: PathBuf,
 }
 
 impl LaunchedProcess {
     pub fn new(
-        install_data: &Arc<Mutex<InstallationsData>>,
+        install_data_path: &Path,
         program: &str,
         args: &Vec<String>,
     ) -> io::Result<LaunchedProcess> {
-        let install_data = install_data.clone();
-        let process = create_process(program, args, install_data.lock().unwrap().base_path())?;
+        let process = create_process(program, args, install_data_path)?;
         Ok(LaunchedProcess {
             running_process: process,
-            original_installation: install_data,
+            original_installation_path: PathBuf::from(install_data_path),
         })
     }
 
@@ -34,5 +32,8 @@ impl LaunchedProcess {
     pub fn wait(&mut self) -> io::Result<ExitStatus> {
         self.running_process.wait()
     }
-}
 
+    pub fn base_path(&self) -> &Path {
+        &self.original_installation_path
+    }
+}

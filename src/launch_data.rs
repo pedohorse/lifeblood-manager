@@ -72,7 +72,7 @@ impl LaunchControlData {
     pub fn start_process(&mut self) -> io::Result<()> {
         self._process = match self._current_installation {
             Some(ref installations) => {
-                match LaunchedProcess::new(installations, &self._command, &self._args) {
+                match LaunchedProcess::new(installations.lock().unwrap().base_path(), &self._command, &self._args) {
                     Ok(p) => {
                         Some(p)
                     },
