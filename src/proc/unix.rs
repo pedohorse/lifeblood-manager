@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::{Child, Command};
 
 pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Result<Child> {
-    Command::new(program).args(args).current_dir(cwd).spawn()
+    Command::new(cwd.join(program)).args(args).current_dir(cwd).spawn()
 }
 
 pub fn terminate_child(child: &Child) -> io::Result<()> {

@@ -12,7 +12,8 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 
 pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Result<Child> {
-    Command::new(program)
+    println!("starting {:?}", program);
+    Command::new(cwd.join(program))
         .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
         .args(args)
         .current_dir(cwd)
