@@ -42,19 +42,19 @@ impl Widget for LaunchWidget {
         let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Scheduler",
-            "./lifeblood",
+            if cfg!(unix) { "./lifeblood" } else { "./lifeblood.cmd" },
             vec!["scheduler"],
         )));
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Worker Pool",
-            "./lifeblood",
+            if cfg!(unix) { "./lifeblood" } else { "./lifeblood.cmd" },
             vec!["pool", "simple"],
         )));
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Viewer",
-            "./lifeblood_viewer",
+            if cfg!(unix) { "./lifeblood_viewer" } else { "./lifeblood_viewer.cmd" },
             vec![],
         )));
         let mut widget = LaunchWidget {
