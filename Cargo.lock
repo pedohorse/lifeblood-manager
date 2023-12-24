@@ -104,6 +104,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f30e7476521f6f8af1a1c4c0b8cc94f0bee37d91763d0ca2665f299b6cd8aec"
 
 [[package]]
+name = "bytemuck"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "374d28ec25809ee0e23827c2ab573d729e293f281dfe393500e7ad618baa61c6"
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -324,9 +330,9 @@ dependencies = [
 
 [[package]]
 name = "fltk"
-version = "1.4.15"
+version = "1.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d30baff5a3d1b10c0c7e8f25327dbe5fc8a8b5a846908bc9ee83bed0118a160"
+checksum = "b3acf0b0170990ce5543e07282ce4231182cd56f19dfd4fe8e1f3c546017e60f"
 dependencies = [
  "bitflags 2.4.1",
  "crossbeam-channel",
@@ -337,9 +343,9 @@ dependencies = [
 
 [[package]]
 name = "fltk-sys"
-version = "1.4.15"
+version = "1.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b911916ee205391540210439f9336bfa1349114896dae29d01c8dfe1cb562150"
+checksum = "1fd92cd637a25f810e9feb54d12c1b58bfea010d1e1222fbbca6691d1995208c"
 dependencies = [
  "cmake",
 ]
@@ -710,6 +716,7 @@ dependencies = [
  "fltk",
  "fs_extra",
  "rand",
+ "winconsole",
  "zip",
 ]
 
@@ -1011,6 +1018,15 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
+]
+
+[[package]]
+name = "rgb"
+version = "0.8.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05aaa8004b64fd573fc9d002f4e632d51ad4f026c2b5ba95fcb6c2f32c2c47d8"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
@@ -1507,6 +1523,17 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "winconsole"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "664fdcefd3903fbe6c463659a3fe4e7a541e717bbf6084cb1cfa98fcb6d88361"
+dependencies = [
+ "lazy_static",
+ "rgb",
+ "winapi",
+]
 
 [[package]]
 name = "windows-core"

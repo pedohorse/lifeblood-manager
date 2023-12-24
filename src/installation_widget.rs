@@ -1,5 +1,5 @@
 use crate::theme::*;
-use crate::widgets::Widget;
+use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
 use fltk::dialog;
@@ -17,14 +17,13 @@ use fltk::{
     prelude::*,
     table::{Table, TableContext},
 };
-use std::sync::PoisonError;
+use std::sync::{PoisonError, MutexGuard};
 use std::{
     path::PathBuf,
     sync::{Mutex, TryLockError},
 };
 use std::{sync::Arc, thread, time::Duration};
 
-const ITEM_HEIGHT: i32 = 32;
 const DEFAULT_BRANCH: &str = "dev";
 
 const DOWNLOAD_LABEL_ANIM: [&str; 12] = [
@@ -43,27 +42,31 @@ const DOWNLOAD_LABEL_ANIM: [&str; 12] = [
 ];
 
 pub struct InstallationWidget {
-    install_data: Option<InstallationsData>,
-    base_path_input: FileInput,
+    install_data: Option<Arc<Mutex<InstallationsData>>>,
     installation_table: Table,
     warning_label: Frame,
     main_flex: Flex,
 }
 
+fn lock_install_data(data: &Arc<Mutex<InstallationsData>>) -> MutexGuard<'_, InstallationsData> {
+    if let Ok(x) = data.lock() { x } else{
+        panic!("failed to lock installations data!");
+    }
+}
+
 impl InstallationWidget {
-    pub fn change_install_dir(&mut self, new_path: PathBuf) -> Result<(), std::io::Error> {
-        let new_data = match InstallationsData::from_dir(new_path.clone()) {
-            Ok(x) => x,
-            Err(e) => {
+    pub fn change_install_dir(&mut self, new_path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>) -> Result<(), std::io::Error> {
+        let new_data = match install_data {
+            Some(x) => x.clone(),
+            None => {
                 self.installation_table.set_rows(0);
-                return Err(e);
+                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "path has no lifeblood installations"));
             }
         };
+        
+        let guard = lock_install_data(&new_data);
 
-        // update input
-        self.base_path_input.set_value(&new_path.to_string_lossy());
-
-        if new_data.is_base_path_tainted() {
+        if guard.is_base_path_tainted() {
             self.warning_label.set_label(
                 "Warning: given path contains elements unrelated to lifeblood.\n\
                        It's recommended to choose an empty directory for lifeblood installations",
@@ -73,6 +76,7 @@ impl InstallationWidget {
             self.warning_label.set_label("");
             self.main_flex.fixed(&self.warning_label, 1);
         }
+        drop(guard);
 
         self.install_data = Some(new_data);
 
@@ -84,36 +88,30 @@ impl InstallationWidget {
     }
 
     fn update_installation_table(&mut self) {
-        if let Some(data) = &self.install_data {
+        if let Some(mutexed_data) = &self.install_data {
+            let data = lock_install_data(&mutexed_data);
             self.installation_table
                 .set_rows(data.version_count() as i32);
             self.installation_table.redraw();
         }
     }
 
-    /// interface initialization helpers
-    fn init_base_path_input() -> (Button, FileInput, Flex) {
-        let mut base_input_flex = Flex::default().row();
-        base_input_flex.fixed(&Frame::default().with_label("base directory"), 120);
-        let mut base_input = FileInput::default();
-        let mut browse_button = Button::default().with_label("browse");
-        base_input_flex.fixed(&browse_button, 64);
-        base_input_flex.end();
+}
 
-        (browse_button, base_input, base_input_flex)
+impl WidgetCallbacks for InstallationWidget {
+    fn install_location_changed(&mut self, path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>){
+        self.change_install_dir(path, install_data).unwrap_or_else(|_| {
+            println!("failed to set path to {:?}", path);
+        })
     }
 }
 
 impl Widget for InstallationWidget {
-    fn initialize() -> Arc<Mutex<Self>> {
-        let mut tab_header = Flex::default_fill().with_label("installation\t").row();
+    fn initialize() -> (Arc<Mutex<Self>>, Flex) {
+        let mut tab_header = Flex::default_fill().with_label("Installation\t").row();
         let mut flex = Flex::default_fill().column();
         flex.set_margin(8);
         flex.set_spacing(16);
-
-        // base path input
-        let (mut browse_button, base_input, base_input_flex) = Self::init_base_path_input();
-        flex.fixed(&base_input_flex, ITEM_HEIGHT);
 
         let path_warning_label = Frame::default().with_label("");
         flex.fixed(&path_warning_label, ITEM_HEIGHT);
@@ -154,7 +152,6 @@ impl Widget for InstallationWidget {
 
         let widget = InstallationWidget {
             install_data: None,
-            base_path_input: base_input,
             installation_table: installations_table,
             warning_label: path_warning_label,
             main_flex: flex,
@@ -165,40 +162,6 @@ impl Widget for InstallationWidget {
         //
         // callbacks
         //
-        // base path input change callback
-        let widget_to_cb = widget.clone();
-        widget
-            .lock()
-            .expect("impossible during init")
-            .base_path_input
-            .set_callback(move |input| {
-                widget_to_cb
-                    .lock()
-                    .unwrap()
-                    .change_install_dir(PathBuf::from(input.value()))
-                    .unwrap_or_else(|_| {
-                        println!("callback failed to set path");
-                    });
-            });
-
-        // file dialog chooser callback
-        let widget_to_cb = widget.clone();
-        browse_button.set_callback(move |_| {
-            let mut dialog = NativeFileChooser::new(fltk::dialog::NativeFileChooserType::BrowseDir);
-            dialog.show();
-            let input_path = dialog.filename();
-            let input_str = &input_path.to_string_lossy();
-            if input_str != "" {
-                //base_input_rc_callback.borrow_mut().set_value(input_str);
-                widget_to_cb
-                    .lock()
-                    .unwrap()
-                    .change_install_dir(input_path)
-                    .unwrap_or_else(|_| {
-                        println!("callback failed to set path");
-                    });
-            }
-        });
 
         // table draw callback
         let widget_to_cb = widget.clone();
@@ -222,10 +185,16 @@ impl Widget for InstallationWidget {
                             } else {
                                 match &widget_to_cb.try_lock() {
                                     Ok(guard) => match guard.install_data {
-                                        Some(ref data)
-                                            if data.current_version_index() == ver_id =>
+                                        Some(ref mutexed_data) =>
                                         {
-                                            CELL_BG_CUR_COLOR
+                                            // TODO: OMG, we are doing 2 locks for EACH CELL !!
+                                            let data = lock_install_data(&mutexed_data);
+                                            if data.current_version_index() == ver_id {
+                                                CELL_BG_CUR_COLOR
+                                            } else {
+                                                CELL_BG_COLOR
+                                            }
+                                            
                                         }
                                         _ => CELL_BG_COLOR,
                                     },
@@ -236,7 +205,8 @@ impl Widget for InstallationWidget {
                         draw::set_draw_color(CELL_FG_COLOR);
                         match &widget_to_cb.try_lock() {
                             Ok(guard) => {
-                                if let Some(ref data) = guard.install_data {
+                                if let Some(ref mutexed_data) = guard.install_data {
+                                    let data = lock_install_data(&mutexed_data);
                                     match data.version(ver_id) {
                                         Some(ver) => match col {
                                             0 => {
@@ -335,8 +305,8 @@ impl Widget for InstallationWidget {
             }
 
             let ver_id = (guard.installation_table.rows() - 1 - row) as usize;
-            let install_data = if let Some(data) = &mut guard.install_data {
-                data
+            let mut install_data = if let Some(data) = &mut guard.install_data {
+                lock_install_data(data)
             } else {
                 return;
             };
@@ -364,6 +334,7 @@ impl Widget for InstallationWidget {
                 eprintln!("failed to rename! {}", e);
                 InfoDialog::show(popup_x, popup_y, &format!("failed to rename! {}", e));
             }
+            drop(install_data);
             
             guard.installation_table.redraw();
         });
@@ -379,7 +350,8 @@ impl Widget for InstallationWidget {
             }
             let ver_id = (guard.installation_table.rows() - 1 - row) as usize;
             match guard.install_data {
-                Some(ref mut data) => {
+                Some(ref mut mutexed_data) => {
+                    let mut data = lock_install_data(&mutexed_data);
                     data.make_version_current(ver_id).unwrap_or_else(|e| {
                         eprintln!("failed to set current version to {}, cuz: {}", ver_id, e);
                     });
@@ -401,7 +373,8 @@ impl Widget for InstallationWidget {
                 let handle = scope.spawn(|| {
                     let guard = &mut widget_to_cb.lock().unwrap();
                     match guard.install_data {
-                        Some(ref mut data) => {
+                        Some(ref mut mutexed_data) => {
+                            let mut data = lock_install_data(&mutexed_data);
                             // download latest
                             let new_ver = match data.download_new_version(&branch, true) {
                                 Ok(idx) => {
@@ -457,6 +430,6 @@ impl Widget for InstallationWidget {
             widget_to_cb.lock().unwrap().update_installation_table();
         });
 
-        widget
+        (widget, tab_header)
     }
 }

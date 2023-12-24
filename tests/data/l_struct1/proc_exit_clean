@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo "starting"
+sleep 1
+echo "working"
+sleep 1
+echo exited

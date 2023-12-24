@@ -1,5 +1,6 @@
 use fltk::enums::Color;
 
+pub const ITEM_HEIGHT: i32 = 32;
 pub const BG_COLOR: [u8; 3] = [48, 48, 60];  // main bg
 pub const BG2_COLOR: [u8; 3] = [32, 32, 32];  // bg for input widgets and such
 pub const FG_COLOR: [u8; 3] = [200, 200, 200];  // main fg
