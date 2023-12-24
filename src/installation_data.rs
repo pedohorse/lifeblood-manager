@@ -1034,6 +1034,48 @@ impl InstallationsData {
                     }
                 };
                 check_status!(exit_status);
+
+                // write pth file
+                let site_path = match process::Command::new(dest_dir.join("venv/bin/python"))
+                    .current_dir(dest_dir)
+                    .arg("-c")
+                    .arg("import site;print(site.getsitepackages()[0])")
+                    .output()
+                {
+                    Ok(status) => match String::from_utf8(status.stdout) {
+                        Ok(x) => {
+                            let path = x.trim();
+                            if path.is_empty() {
+                                return Err(Error::new(
+                                    std::io::ErrorKind::InvalidData,
+                                    "site path seem to be empty",
+                                ));
+                            }
+                            PathBuf::from(path)
+                        }
+                        Err(e) => {
+                            return Err(Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                format!("failed to parse site packages path as utf-8: {:?}", e),
+                            ));
+                        }
+                    },
+                    Err(e) => {
+                        return Err(Error::new(e.kind(), format!("error running python: {}", e)));
+                    }
+                };
+                if !site_path.exists() {
+                    return Err(Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "site path does not exist",
+                    ));
+                }
+
+                let mut py_pth_file = fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .open(site_path.join("lifeblood.pth"))?;
+                writeln!(py_pth_file, "{}", if cfg!(unix) { "../../../..\n" } else { "..\\..\\..\n" } )?;
             } else {
                 // python not found, but we know what to do on windows in this case
                 if cfg!(windows) {
