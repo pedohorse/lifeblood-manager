@@ -3,21 +3,18 @@ use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
 use fltk::dialog;
-use fltk::enums::{CallbackTrigger, LabelType};
 use fltk::misc::InputChoice;
 use fltk::{
     app,
     button::Button,
-    dialog::NativeFileChooser,
     draw,
-    enums::{self, Color, FrameType},
+    enums,
     frame::Frame,
-    group::{Flex, Group, Tabs},
-    input::FileInput,
+    group::Flex,
     prelude::*,
     table::{Table, TableContext},
 };
-use std::sync::{PoisonError, MutexGuard};
+use std::sync::MutexGuard;
 use std::{
     path::PathBuf,
     sync::{Mutex, TryLockError},
@@ -55,7 +52,7 @@ fn lock_install_data(data: &Arc<Mutex<InstallationsData>>) -> MutexGuard<'_, Ins
 }
 
 impl InstallationWidget {
-    pub fn change_install_dir(&mut self, new_path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>) -> Result<(), std::io::Error> {
+    pub fn change_install_dir(&mut self, _new_path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>) -> Result<(), std::io::Error> {
         let new_data = match install_data {
             Some(x) => x.clone(),
             None => {
@@ -108,7 +105,7 @@ impl WidgetCallbacks for InstallationWidget {
 
 impl Widget for InstallationWidget {
     fn initialize() -> (Arc<Mutex<Self>>, Flex) {
-        let mut tab_header = Flex::default_fill().with_label("Installation\t").row();
+        let tab_header = Flex::default_fill().with_label("Installation\t").row();
         let mut flex = Flex::default_fill().column();
         flex.set_margin(8);
         flex.set_spacing(16);

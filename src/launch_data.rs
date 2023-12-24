@@ -1,6 +1,10 @@
 use crate::running_process_data::LaunchedProcess;
 use crate::InstallationsData;
-use std::{sync::{Arc, Mutex, MutexGuard}, io, process::ExitStatus};
+use std::{
+    io,
+    process::ExitStatus,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 pub struct LaunchControlData {
     _process: Option<LaunchedProcess>,
@@ -65,24 +69,32 @@ impl LaunchControlData {
         self._current_installation_changed_callback = callback_maybe;
     }
 
-    pub fn set_install_location_changed_callback(&mut self, callback: Option<Box<dyn FnMut(&LaunchControlData, Option<&InstallationsData>) -> ()>>) {
+    pub fn set_install_location_changed_callback(
+        &mut self,
+        callback: Option<Box<dyn FnMut(&LaunchControlData, Option<&InstallationsData>) -> ()>>,
+    ) {
         self._current_installation_changed_callback = callback;
     }
 
     pub fn start_process(&mut self) -> io::Result<()> {
         self._process = match self._current_installation {
             Some(ref installations) => {
-                match LaunchedProcess::new(installations.lock().unwrap().base_path(), &self._command, &self._args) {
-                    Ok(p) => {
-                        Some(p)
-                    },
+                match LaunchedProcess::new(
+                    installations.lock().unwrap().base_path(),
+                    &self._command,
+                    &self._args,
+                ) {
+                    Ok(p) => Some(p),
                     Err(e) => {
                         return Err(e);
                     }
                 }
             }
             None => {
-                return Err(io::Error::new(io::ErrorKind::Other, "installation data is not set"));
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "installation data is not set",
+                ));
             }
         };
         Ok(())
@@ -95,7 +107,7 @@ impl LaunchControlData {
             false
         }
     }
-    
+
     /// TODO: add docstrings explaining behaviour
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         match self._process {
@@ -108,7 +120,7 @@ impl LaunchControlData {
                 }
                 status_maybe
             }
-            None => Err(io::Error::new(io::ErrorKind::Other, "not started"))
+            None => Err(io::Error::new(io::ErrorKind::Other, "not started")),
         }
     }
 
@@ -123,7 +135,7 @@ impl LaunchControlData {
                 }
                 status
             }
-            None => Err(io::Error::new(io::ErrorKind::Other, "not started"))
+            None => Err(io::Error::new(io::ErrorKind::Other, "not started")),
         }
     }
 
@@ -137,10 +149,8 @@ impl LaunchControlData {
 
     pub fn current_installation(&self) -> Option<MutexGuard<InstallationsData>> {
         match self._current_installation {
-            Some(ref mutexed_installations) => {
-                Some(mutexed_installations.lock().unwrap())
-            }
-            None => None
+            Some(ref mutexed_installations) => Some(mutexed_installations.lock().unwrap()),
+            None => None,
         }
     }
 
