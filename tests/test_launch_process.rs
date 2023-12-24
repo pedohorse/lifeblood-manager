@@ -6,24 +6,64 @@ use std::time::Duration;
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes() {
-    launch_test_helper(if cfg!(unix) { "./proc_exit_clean" } else { "proc_exit_clean.cmd" }, &vec![], Ok(Some(0)), -1.);
+    launch_test_helper(
+        if cfg!(unix) {
+            "./proc_exit_clean"
+        } else {
+            "./proc_exit_clean.cmd"
+        },
+        &vec![],
+        Ok(Some(0)),
+        -1.,
+    );
 }
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes_err() {
-    launch_test_helper(if cfg!(unix) { "./proc_exit_1" } else { "proc_exit_1.cmd" }, &vec![], Ok(Some(1)), -1.);
+    launch_test_helper(
+        if cfg!(unix) {
+            "./proc_exit_1"
+        } else {
+            "./proc_exit_1.cmd"
+        },
+        &vec![],
+        Ok(Some(1)),
+        -1.,
+    );
 }
 
 #[test]
 fn test_launchedprocess_run_wait_till_finishes_arg() {
     for i in [1, 2, 3, 5, 7, 12] {
-        launch_test_helper(if cfg!(unix) { "./proc_exit_arg" } else { "proc_exit_arg.cmd" }, &vec![i.to_string()], Ok(Some(i)), -1.);
+        launch_test_helper(
+            if cfg!(unix) {
+                "./proc_exit_arg"
+            } else {
+                "./proc_exit_arg.cmd"
+            },
+            &vec![i.to_string()],
+            Ok(Some(i)),
+            -1.,
+        );
     }
 }
 
 #[test]
 fn test_launchedprocess_run_terminate() {
-    launch_test_helper(if cfg!(unix) { "./proc_exit_clean" } else { "proc_exit_clean.cmd" }, &vec![], Ok(None), 0.5);
+    launch_test_helper(
+        if cfg!(unix) {
+            "./proc_exit_clean"
+        } else {
+            "./proc_exit_clean.cmd"
+        },
+        &vec![],
+        if cfg!(unix) {
+            Ok(None)  // on unix return code is None when killed by signal
+        } else {
+            Ok(Some(0))  // on windows return code is normal
+        },
+        0.5,
+    );
 }
 
 fn launch_test_helper(
