@@ -6,11 +6,67 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+enum LaunchControlDataOptionType {
+    RawString(String),
+    Int(i64),
+    Enum((Vec<(String, String)>, usize)), // (key, label), selected option
+}
+
+pub struct LaunchControlDataOption {
+    _type: LaunchControlDataOptionType,
+    _flag: Option<String>,
+    _args_cache: Option<Vec<String>>,
+}
+
+impl LaunchControlDataOption {
+    pub fn new(option_type: LaunchControlDataOptionType, flag: Option<String>) -> LaunchControlDataOption {
+        LaunchControlDataOption {
+            _type: option_type,
+            _flag: flag,
+            _args_cache: None,
+        }
+    }
+
+    pub fn get_args(&mut self) -> &[String] {
+        if let None = self._args_cache {
+            let mut args = Vec::with_capacity(2);
+            if let Some(ref flag) = self._flag {
+                args.push(flag.to_owned());
+            }
+
+            {
+                use LaunchControlDataOptionType::*;
+                match self._type {
+                    RawString(ref s) => {
+                        args.push(s.to_owned());
+                    }
+                    Int(i) => {
+                        args.push(format!("{}", i));
+                    }
+                    Enum((ref token_list, option_i)) => {
+                        let (flag, _) = &token_list[option_i];
+                        args.push(flag.to_owned());
+                    }
+                }
+            }
+
+            self._args_cache = Some(args);
+        }
+
+        if let Some(ref cache) = self._args_cache {
+            return cache.as_slice();
+        } else {
+            unreachable!();
+        }
+    }
+}
+
 pub struct LaunchControlData {
     _process: Option<LaunchedProcess>,
     _command_label: String,
     _command: String,
     _args: Vec<String>,
+    _args_options: Vec<LaunchControlDataOption>,
     _current_installation: Option<Arc<Mutex<InstallationsData>>>,
     _last_run_exit_code: Option<i32>,
     _current_installation_changed_callback:
@@ -23,12 +79,18 @@ impl LaunchControlData {
         command_label: &str,
         command: &str,
         args: Vec<&str>,
+        args_options: Option<Vec<LaunchControlDataOption>>,
     ) -> LaunchControlData {
         LaunchControlData {
             _process: None,
             _command_label: command_label.to_owned(),
             _command: command.to_owned(),
             _args: args.into_iter().map(|x| x.to_owned()).collect(),
+            _args_options: if let Some(v) = args_options {
+                v
+            } else {
+                Vec::new()
+            },
             _current_installation: if let Some(x) = installations {
                 Some(x.clone())
             } else {

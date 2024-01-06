@@ -1,4 +1,4 @@
-use crate::launch_data::LaunchControlData;
+use crate::launch_data::{LaunchControlData, LaunchControlDataOption};
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
@@ -48,6 +48,7 @@ impl Widget for LaunchWidget {
                 "./lifeblood.cmd"
             },
             vec!["scheduler"],
+            Some(vec![])
         )));
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
@@ -58,6 +59,7 @@ impl Widget for LaunchWidget {
                 "./lifeblood.cmd"
             },
             vec!["pool", "simple"],
+            None
         )));
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
@@ -68,6 +70,7 @@ impl Widget for LaunchWidget {
                 "./lifeblood_viewer.cmd"
             },
             vec![],
+            None
         )));
         let mut widget = LaunchWidget {
             scheduler_launch_data: scheduler_launch_data.clone(),
