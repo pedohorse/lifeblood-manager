@@ -2,7 +2,9 @@ use fltk::{
     app, button::Button, dialog::NativeFileChooser, frame::Frame, group::Flex, group::Tabs,
     input::FileInput, prelude::*, window::Window,
 };
-use lifeblood_manager::{theme::*, InstallationWidget, LaunchWidget, Widget, WidgetCallbacks, InstallationsData};
+use lifeblood_manager::{
+    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks,
+};
 use std::env::current_dir;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -37,8 +39,8 @@ impl MainWidget {
         flex.fixed(&path_warning_label, ITEM_HEIGHT);
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
-        
-        let tabs = Tabs::default_fill();//.with_size(128, 111);
+
+        let tabs = Tabs::default_fill(); //.with_size(128, 111);
         let (install_widget, _) = InstallationWidget::initialize();
         let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
 
@@ -85,18 +87,12 @@ impl MainWidget {
             let input_str = &input_path.to_string_lossy();
             if input_str != "" {
                 //base_input_rc_callback.borrow_mut().set_value(input_str);
-                widget_to_cb
-                    .lock()
-                    .unwrap()
-                    .change_install_dir(&input_path);
+                widget_to_cb.lock().unwrap().change_install_dir(&input_path);
             }
         });
 
         // lastly, initialize
-        widget
-            .lock()
-            .unwrap()
-            .change_install_dir(path);
+        widget.lock().unwrap().change_install_dir(path);
 
         widget
     }
