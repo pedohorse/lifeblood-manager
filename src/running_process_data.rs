@@ -38,6 +38,10 @@ impl LaunchedProcess {
     pub fn base_path(&self) -> &Path {
         &self.original_installation_path
     }
+
+    pub fn pid(&self) -> u32 {
+        self.running_process.id()
+    }
 }
 
 impl Drop for LaunchedProcess {
