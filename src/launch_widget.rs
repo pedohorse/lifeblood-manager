@@ -1,7 +1,10 @@
-use crate::launch_data::{LaunchControlData, LaunchControlDataOption, LaunchControlDataOptionValueStorage};
+use crate::launch_data::{
+    LaunchControlData, LaunchControlDataOption, LaunchControlDataOptionValueStorage,
+};
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
+use fltk::enums::CallbackTrigger;
 use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::{app, frame::Frame, group::Flex, prelude::*};
@@ -119,16 +122,14 @@ impl Widget for LaunchWidget {
                 "./lifeblood_viewer.cmd"
             },
             vec![],
-            Some(vec![
-                LaunchControlDataOption::new(
-                    "log level",
-                    LaunchControlDataOptionValueStorage::new_enum(vec![
-                        ("INFO", "info"),
-                        ("DEBUG", "debug"),
-                    ]),
-                    Some("--loglevel"),
-                ),
-            ]),
+            Some(vec![LaunchControlDataOption::new(
+                "log level",
+                LaunchControlDataOptionValueStorage::new_enum(vec![
+                    ("INFO", "info"),
+                    ("DEBUG", "debug"),
+                ]),
+                Some("--loglevel"),
+            )]),
         )));
 
         // main launch widget
@@ -170,31 +171,58 @@ impl LaunchWidget {
             group_height += 30;
             let option_group = Flex::default_fill().row();
             options_widgets.push(Box::new(Frame::default_fill().with_label(option.label())));
+
+            macro_rules! cdgetter {
+                ($c:ident) => {
+                    if let Some(x) = $c.upgrade() {
+                        x
+                    } else {
+                        println!("[WARNING] callback ui called after data is dropped, ignoring");
+                        return;
+                    }
+                };
+            }
+
             match option.value() {
                 RawString(s) => {
                     let mut inp = Input::default_fill();
                     inp.set_value(s);
+                    inp.set_trigger(CallbackTrigger::Changed);
+                    let control_data = Rc::downgrade(&control_data);
+                    inp.set_callback(move |wgt| {
+                        let control_data = cdgetter!(control_data);
+                        let mut cdata = control_data.borrow_mut();
+                        let option = &mut cdata.args_options_mut()[opt_idx];
+                        option.set_value(crate::launch_data::LaunchControlDataOptionValue::String(
+                            wgt.value(),
+                        ));
+                    });
                     options_widgets.push(Box::new(inp));
                 }
                 Int(i) => {
                     let mut inp = IntInput::default_fill();
                     inp.set_value(&i.to_string());
+                    inp.set_trigger(CallbackTrigger::Changed);
+                    let control_data = Rc::downgrade(&control_data);
+                    inp.set_callback(move |wgt| {
+                        let control_data = cdgetter!(control_data);
+                        let mut cdata = control_data.borrow_mut();
+                        let option = &mut cdata.args_options_mut()[opt_idx];
+                        option.set_value(crate::launch_data::LaunchControlDataOptionValue::Int(
+                            wgt.value().parse().unwrap_or(10),
+                        ));
+                    });
                     options_widgets.push(Box::new(inp));
                 }
                 Enum((val_pairs, selected)) => {
                     let mut inp = Choice::default_fill();
-                    for (key, label) in val_pairs {
+                    for (_, label) in val_pairs {
                         inp.add_choice(label);
                     }
                     inp.set_value(*selected as i32);
                     let control_data = Rc::downgrade(&control_data);
                     inp.set_callback(move |wgt| {
-                        let control_data = if let Some(x) = control_data.upgrade() {
-                            x
-                        } else {
-                            println!("[WARNING] callback ui called after data is dropped, ignoring");
-                            return;
-                        };
+                        let control_data = cdgetter!(control_data);
                         let mut cdata = control_data.borrow_mut();
                         let option = &mut cdata.args_options_mut()[opt_idx];
                         option.set_value(crate::launch_data::LaunchControlDataOptionValue::Enum(
@@ -216,6 +244,7 @@ impl LaunchWidget {
 
         let info_box = Flex::default_fill().column();
         Frame::default().with_label(&control_data.borrow().command_label());
+        let pid_label = Frame::default().with_label("");
         let mut info_label1 = Flex::default_fill().row();
         info_label1.fixed(&Frame::default().with_label("base:"), 48);
         let info_label_running_root = Frame::default().with_label("not running");
@@ -239,6 +268,7 @@ impl LaunchWidget {
         let mut start_button_cl = start_button.clone();
         let mut stop_button_cl = stop_button.clone();
         let mut status_label_cl = status_label.clone();
+        let mut pid_label_cl = pid_label.clone();
         let mut options_widgets_cl = options_widgets_rc.clone();
         let mut info_label_running_root_cl = info_label_running_root.clone();
         app::add_timeout3(1.0, move |handle| {
@@ -269,6 +299,7 @@ impl LaunchWidget {
                     stop_button_cl.deactivate();
                     Self::change_active_status_on_vec(&mut options_widgets_cl, true);
                     info_label_running_root_cl.set_label("not running");
+                    pid_label_cl.set_label("");
                 }
                 Err(e) => {
                     eprintln!("failed to check process status: {:?}, ignoring", e);
@@ -283,6 +314,7 @@ impl LaunchWidget {
         let mut start_button_cl = start_button.clone();
         let mut stop_button_cl = stop_button.clone();
         let mut status_label_cl = status_label.clone();
+        let mut pid_label_cl = pid_label.clone();
         let mut options_widgets_cl = options_widgets_rc.clone();
         let mut info_label_running_root_cl = info_label_running_root.clone();
         start_button.set_callback(move |_| {
@@ -327,6 +359,14 @@ impl LaunchWidget {
             Self::change_active_status_on_vec(&mut options_widgets_cl, false);
             stop_button_cl.activate();
             status_label_cl.set_label("🟢 running");
+            pid_label_cl.set_label(&format!(
+                "pid: {}",
+                if let Some(pid) = data.process_pid() {
+                    pid
+                } else {
+                    0
+                }
+            ));
         });
 
         let control_data_ref = Rc::downgrade(&control_data);
@@ -376,7 +416,10 @@ impl LaunchWidget {
             )));
     }
 
-    fn change_active_status_on_vec(widgets: &mut Rc<RefCell<Vec<Box<dyn WidgetExt>>>>, active: bool) {
+    fn change_active_status_on_vec(
+        widgets: &mut Rc<RefCell<Vec<Box<dyn WidgetExt>>>>,
+        active: bool,
+    ) {
         for wgt in widgets.borrow_mut().iter_mut() {
             if active {
                 wgt.activate();
