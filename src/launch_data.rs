@@ -240,6 +240,14 @@ impl LaunchControlData {
         }
     }
 
+    pub fn process_pid(&self) -> Option<u32> {
+        if let Some(ref proc) = self._process {
+            Some(proc.pid())
+        } else {
+            None
+        }
+    }
+
     /// TODO: add docstrings explaining behaviour
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         match self._process {
