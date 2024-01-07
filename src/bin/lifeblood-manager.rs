@@ -141,6 +141,7 @@ fn main() {
     wind.make_resizable(true);
     wind.show();
     app.run().unwrap();
+    app::delete_widget(wind); // deleting widgets delets lambdas holding arcs to self
 
     // // Theming
     // wind.set_color(Color::White);
