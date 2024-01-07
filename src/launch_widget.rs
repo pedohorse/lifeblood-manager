@@ -41,6 +41,7 @@ impl Widget for LaunchWidget {
         flex.set_margin(8);
         flex.set_spacing(16);
 
+        // different launch options
         let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Scheduler",
@@ -64,6 +65,19 @@ impl Widget for LaunchWidget {
                     LaunchControlDataOptionValueStorage::Nothing,
                     Some("scheduler"),
                 ),
+                LaunchControlDataOption::new(
+                    "pinger's verbosity",
+                    LaunchControlDataOptionValueStorage::new_enum(vec![
+                        ("INFO", "info"),
+                        ("DEBUG", "debug"),
+                    ]),
+                    Some("--verbosity-pinger"),
+                ),
+                LaunchControlDataOption::new(
+                    "broadcast interval",
+                    LaunchControlDataOptionValueStorage::new_int(10),
+                    Some("--broadcast-interval"),
+                ),
             ]),
         )));
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
@@ -74,8 +88,27 @@ impl Widget for LaunchWidget {
             } else {
                 "./lifeblood.cmd"
             },
-            vec!["pool", "simple"],
-            None,
+            vec![],
+            Some(vec![
+                LaunchControlDataOption::new(
+                    "log level",
+                    LaunchControlDataOptionValueStorage::new_enum(vec![
+                        ("INFO", "info"),
+                        ("DEBUG", "debug"),
+                    ]),
+                    Some("--loglevel"),
+                ),
+                LaunchControlDataOption::new(
+                    "component",
+                    LaunchControlDataOptionValueStorage::Nothing,
+                    Some("pool"),
+                ),
+                LaunchControlDataOption::new(
+                    "component",
+                    LaunchControlDataOptionValueStorage::Nothing,
+                    Some("simple"),
+                ),
+            ]),
         )));
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
@@ -86,8 +119,19 @@ impl Widget for LaunchWidget {
                 "./lifeblood_viewer.cmd"
             },
             vec![],
-            None,
+            Some(vec![
+                LaunchControlDataOption::new(
+                    "log level",
+                    LaunchControlDataOptionValueStorage::new_enum(vec![
+                        ("INFO", "info"),
+                        ("DEBUG", "debug"),
+                    ]),
+                    Some("--loglevel"),
+                ),
+            ]),
         )));
+
+        // main launch widget
         let mut widget = LaunchWidget {
             scheduler_launch_data: scheduler_launch_data.clone(),
             worker_pool_launch_data: wpool_launch_data.clone(),
@@ -111,27 +155,31 @@ impl LaunchWidget {
         control_data: Rc<RefCell<LaunchControlData>>,
     ) {
         let flex = Flex::default_fill().row();
-        parent_group.fixed(&flex, 64);
+        let mut group_height = 60;
 
         let button_box = Flex::default_fill().column();
         // running status
         let mut status_label = Frame::default_fill().with_label("off");
         // control options
+        let mut options_widgets: Vec<Box<dyn WidgetExt>> = Vec::new();
         for (opt_idx, option) in control_data.borrow().args_options().iter().enumerate() {
             use LaunchControlDataOptionValueStorage::*;
             if let Nothing = option.value() {
                 continue;
             }
+            group_height += 30;
             let option_group = Flex::default_fill().row();
-            Frame::default_fill().with_label(option.label());
+            options_widgets.push(Box::new(Frame::default_fill().with_label(option.label())));
             match option.value() {
                 RawString(s) => {
                     let mut inp = Input::default_fill();
                     inp.set_value(s);
+                    options_widgets.push(Box::new(inp));
                 }
                 Int(i) => {
                     let mut inp = IntInput::default_fill();
                     inp.set_value(&i.to_string());
+                    options_widgets.push(Box::new(inp));
                 }
                 Enum((val_pairs, selected)) => {
                     let mut inp = Choice::default_fill();
@@ -153,6 +201,7 @@ impl LaunchWidget {
                             wgt.value() as usize,
                         ));
                     });
+                    options_widgets.push(Box::new(inp));
                 }
                 Nothing => (),
             }
@@ -173,7 +222,11 @@ impl LaunchWidget {
         info_label1.end();
         info_box.end();
 
+        parent_group.fixed(&flex, group_height);
+
         flex.end();
+
+        let options_widgets_rc = Rc::new(RefCell::new(options_widgets));
 
         // init state
         stop_button.deactivate();
@@ -186,6 +239,7 @@ impl LaunchWidget {
         let mut start_button_cl = start_button.clone();
         let mut stop_button_cl = stop_button.clone();
         let mut status_label_cl = status_label.clone();
+        let mut options_widgets_cl = options_widgets_rc.clone();
         let mut info_label_running_root_cl = info_label_running_root.clone();
         app::add_timeout3(1.0, move |handle| {
             let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
@@ -213,6 +267,7 @@ impl LaunchWidget {
                     };
                     start_button_cl.activate();
                     stop_button_cl.deactivate();
+                    Self::change_active_status_on_vec(&mut options_widgets_cl, true);
                     info_label_running_root_cl.set_label("not running");
                 }
                 Err(e) => {
@@ -228,6 +283,7 @@ impl LaunchWidget {
         let mut start_button_cl = start_button.clone();
         let mut stop_button_cl = stop_button.clone();
         let mut status_label_cl = status_label.clone();
+        let mut options_widgets_cl = options_widgets_rc.clone();
         let mut info_label_running_root_cl = info_label_running_root.clone();
         start_button.set_callback(move |_| {
             let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
@@ -268,6 +324,7 @@ impl LaunchWidget {
             };
 
             start_button_cl.deactivate();
+            Self::change_active_status_on_vec(&mut options_widgets_cl, false);
             stop_button_cl.activate();
             status_label_cl.set_label("🟢 running");
         });
@@ -317,5 +374,15 @@ impl LaunchWidget {
                     }
                 },
             )));
+    }
+
+    fn change_active_status_on_vec(widgets: &mut Rc<RefCell<Vec<Box<dyn WidgetExt>>>>, active: bool) {
+        for wgt in widgets.borrow_mut().iter_mut() {
+            if active {
+                wgt.activate();
+            } else {
+                wgt.deactivate();
+            }
+        }
     }
 }
