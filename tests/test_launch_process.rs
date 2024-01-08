@@ -96,7 +96,7 @@ fn launch_test_helper(
         thread::sleep(Duration::from_millis(500));
         passed += 0.5;
         if !signalled && passed > send_term_after {
-            proc.send_terminate_signal();
+            proc.send_terminate_signal().unwrap_or_else(|e| {panic!("error terminating! {:?}", e)});
             signalled = true;
         }
         match proc.try_wait() {
