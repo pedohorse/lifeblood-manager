@@ -131,7 +131,7 @@ fn main() {
     app::set_visible_focus(false);
 
     let mut wind = Window::default()
-        .with_size(650, 400)
+        .with_size(650, 500)
         .with_label("Lifeblood Manager");
 
     MainWidget::new(&current_dir);
