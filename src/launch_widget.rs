@@ -10,7 +10,7 @@ use fltk::menu::Choice;
 use fltk::{app, frame::Frame, group::Flex, prelude::*};
 use std::cell::RefCell;
 use std::path::{Component, PathBuf};
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 pub struct LaunchWidget {
