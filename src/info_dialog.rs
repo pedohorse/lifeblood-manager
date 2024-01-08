@@ -1,4 +1,4 @@
-use fltk::{window::Window, prelude::{WidgetExt, GroupExt, WindowExt, WidgetBase}, group::Flex, app, frame::Frame, button::Button };
+use fltk::{window::Window, prelude::{WidgetExt, GroupExt, WindowExt, WidgetBase}, group::Flex, frame::Frame, button::Button };
 
 ///
 /// why? well, default alert and message crash my xwayland

@@ -6,11 +6,123 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
+pub enum LaunchControlDataOptionValueStorage {
+    RawString(String),
+    Int(i64),
+    Enum((Vec<(String, String)>, usize)), // (key, label), selected option
+    Nothing,
+}
+
+pub enum LaunchControlDataOptionValue {
+    String(String),
+    Int(i64),
+    Enum(usize),
+}
+
+impl LaunchControlDataOptionValueStorage {
+    pub fn new_enum(kvp: Vec<(&str, &str)>) -> LaunchControlDataOptionValueStorage {
+        LaunchControlDataOptionValueStorage::Enum((
+            kvp.into_iter().map(|(key, val)| {
+                (key.to_owned(), val.to_owned())
+            }).collect(),
+            0
+        ))
+    }
+
+    pub fn new_string(value: &str) -> LaunchControlDataOptionValueStorage {
+        LaunchControlDataOptionValueStorage::RawString(value.to_owned())
+    }
+
+    pub fn new_int(value: i64) -> LaunchControlDataOptionValueStorage {
+        LaunchControlDataOptionValueStorage::Int(value)
+    }
+}
+
+pub struct LaunchControlDataOption {
+    name: String,
+    _storage: LaunchControlDataOptionValueStorage,
+    _flag: Option<String>,
+    _args_cache: Option<Vec<String>>,
+}
+
+impl LaunchControlDataOption {
+    pub fn new(name: &str, option_value: LaunchControlDataOptionValueStorage, flag: Option<&str>) -> LaunchControlDataOption {
+        LaunchControlDataOption {
+            name: name.to_owned(),
+            _storage: option_value,
+            _flag: if let Some(x) = flag { Some(x.to_owned()) } else { None },
+            _args_cache: None,
+        }
+    }
+
+    pub fn label(&self) -> &str {
+        &self.name
+    }
+
+    pub fn value(&self) -> &LaunchControlDataOptionValueStorage {
+        &self._storage
+    }
+
+    pub fn set_value(&mut self, new_value: LaunchControlDataOptionValue) {
+        use LaunchControlDataOptionValueStorage::*;
+        let mut tmp_val = LaunchControlDataOptionValueStorage::Nothing;
+        std::mem::swap(&mut tmp_val, &mut self._storage);
+        match (tmp_val, new_value) {
+            (RawString(_), LaunchControlDataOptionValue::String(s)) => {
+                self._storage = RawString(s);
+            }
+            (Int(_), LaunchControlDataOptionValue::Int(i)) => {
+                self._storage = Int(i);
+            }
+            (Enum((menu, _)), LaunchControlDataOptionValue::Enum(i)) => {
+                self._storage = Enum((menu, i));
+            },
+            _ => panic!("value type cannot be changed!")
+        }
+        self._args_cache = None;
+    }
+
+    pub fn get_args(&mut self) -> &[String] {
+        if let None = self._args_cache {
+            let mut args = Vec::with_capacity(2);
+            if let Some(ref flag) = self._flag {
+                args.push(flag.to_owned());
+            }
+
+            {
+                use LaunchControlDataOptionValueStorage::*;
+                match self._storage {
+                    RawString(ref s) => {
+                        args.push(s.to_owned());
+                    }
+                    Int(i) => {
+                        args.push(format!("{}", i));
+                    }
+                    Enum((ref token_list, option_i)) => {
+                        let (flag, _) = &token_list[option_i];
+                        args.push(flag.to_owned());
+                    }
+                    Nothing => ()
+                }
+            }
+
+            self._args_cache = Some(args);
+        }
+
+        if let Some(ref cache) = self._args_cache {
+            return cache.as_slice();
+        } else {
+            unreachable!();
+        }
+    }
+}
+
 pub struct LaunchControlData {
     _process: Option<LaunchedProcess>,
     _command_label: String,
     _command: String,
     _args: Vec<String>,
+    _args_options: Vec<LaunchControlDataOption>,
     _current_installation: Option<Arc<Mutex<InstallationsData>>>,
     _last_run_exit_code: Option<i32>,
     _current_installation_changed_callback:
@@ -23,12 +135,18 @@ impl LaunchControlData {
         command_label: &str,
         command: &str,
         args: Vec<&str>,
+        args_options: Option<Vec<LaunchControlDataOption>>,
     ) -> LaunchControlData {
         LaunchControlData {
             _process: None,
             _command_label: command_label.to_owned(),
             _command: command.to_owned(),
             _args: args.into_iter().map(|x| x.to_owned()).collect(),
+            _args_options: if let Some(v) = args_options {
+                v
+            } else {
+                Vec::new()
+            },
             _current_installation: if let Some(x) = installations {
                 Some(x.clone())
             } else {
@@ -37,6 +155,14 @@ impl LaunchControlData {
             _last_run_exit_code: None,
             _current_installation_changed_callback: None,
         }
+    }
+
+    pub fn args_options(&self) -> &Vec<LaunchControlDataOption> {
+        &self._args_options
+    }
+
+    pub fn args_options_mut(&mut self) -> &mut Vec<LaunchControlDataOption> {
+        &mut self._args_options
     }
 
     pub fn install_location_changed(
@@ -77,12 +203,18 @@ impl LaunchControlData {
     }
 
     pub fn start_process(&mut self) -> io::Result<()> {
+        let mut args_full = self._args.clone();
+        for opts in self._args_options.iter_mut() {
+            args_full.extend_from_slice(opts.get_args());
+        }
+        
+        println!("[DEBUG] about to start: {} with args {:?}", self._command, args_full);
         self._process = match self._current_installation {
             Some(ref installations) => {
                 match LaunchedProcess::new(
                     installations.lock().unwrap().base_path(),
                     &self._command,
-                    &self._args,
+                    &args_full,
                 ) {
                     Ok(p) => Some(p),
                     Err(e) => {
@@ -105,6 +237,14 @@ impl LaunchControlData {
             true
         } else {
             false
+        }
+    }
+
+    pub fn process_pid(&self) -> Option<u32> {
+        if let Some(ref proc) = self._process {
+            Some(proc.pid())
+        } else {
+            None
         }
     }
 

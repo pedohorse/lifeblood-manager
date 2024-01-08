@@ -60,9 +60,9 @@ fn test_launchedprocess_run_terminate() {
         },
         vec![],
         if cfg!(unix) {
-            Ok(None)  // on unix return code is None when killed by signal
+            Ok(None) // on unix return code is None when killed by signal
         } else {
-            Ok(Some(0))  // on windows return code is normal
+            Ok(Some(0)) // on windows return code is normal
         },
         0.5,
     );
@@ -82,7 +82,7 @@ fn launch_test_helper(
         };
 
     let label = format!("foo: {}", program);
-    let mut launch_data = LaunchControlData::new(Some(&installs), &label, program, args);
+    let mut launch_data = LaunchControlData::new(Some(&installs), &label, program, args, None);
 
     assert_eq!(label, launch_data.command_label());
     assert_eq!(program, launch_data.command());
@@ -102,7 +102,7 @@ fn launch_test_helper(
         thread::sleep(Duration::from_millis(500));
         passed += 0.5;
         if !signalled && passed > send_term_after {
-            launch_data.process().unwrap().send_terminate_signal();
+            launch_data.process().unwrap().send_terminate_signal().unwrap_or_else(|e| {panic!("error terminating! {:?}", e)});
             signalled = true;
         }
         match launch_data.try_wait() {

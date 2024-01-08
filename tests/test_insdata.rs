@@ -1,8 +1,7 @@
 use lifeblood_manager::InstallationsData;
 
-#[cfg(unix)]
 #[test]
-fn test_read_unix_struct1() {
+fn test_read_struct1() {
     use std::path::PathBuf;
 
     let ins = if let Ok(x) = InstallationsData::from_dir(PathBuf::from("./tests/data/u_struct1")) {
