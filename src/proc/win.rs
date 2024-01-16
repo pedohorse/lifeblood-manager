@@ -12,6 +12,18 @@ const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;  // This is needed for pid to 
 
 
 pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Result<Child> {
+    // rust likes working with "verbatim" paths,
+    // but window's shell and some parts of python do not like such paths
+    // so it's safer to just strip that shit
+    let cwd = &{
+        let tmp = cwd.to_str().unwrap();
+        if tmp.starts_with("\\\\?\\") {
+            Path::new(&tmp[4..])
+        } else {
+            cwd
+        }
+    };
+
     println!("starting {:?}", program);
     Command::new(cwd.join(program))
         .creation_flags(CREATE_NEW_PROCESS_GROUP)
