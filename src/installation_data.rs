@@ -6,6 +6,7 @@ use std::io::{BufReader, Error};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::str::FromStr;
 use std::{env, fs};
 
 use downloader::{Download, Downloader};
@@ -1036,7 +1037,9 @@ impl InstallationsData {
                 check_status!(exit_status);
 
                 // write pth file
-                let site_path = match process::Command::new(dest_dir.join("venv/bin/python"))
+                let venv_pybin_name = if cfg!(windows) { "python.exe" } else { "python" };
+                let venv_pybin_path = PathBuf::from_str("venv").unwrap().join(VENV_BIN).join(venv_pybin_name);
+                let site_path = match process::Command::new(dest_dir.join(venv_pybin_path))
                     .current_dir(dest_dir)
                     .arg("-c")
                     .arg("import site;print(site.getsitepackages()[0])")
