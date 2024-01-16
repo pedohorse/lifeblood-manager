@@ -26,14 +26,15 @@ pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Resu
 
     println!("starting {:?}", program);
     Command::new(cwd.join(program))
-        .creation_flags(CREATE_NEW_PROCESS_GROUP)
+        .creation_flags(CREATE_NEW_PROCESS_GROUP)  // CREATE_NEW_PROCESS_GROUP is a must, other flats just break things for now
         .args(args)
-        .stdin(Stdio::null())
+        .stdin(Stdio::null())  // windows cmd loves to ask things like "Terminate batch job? Y/N". shutting stdin saves from that
         .current_dir(cwd)
         .spawn()
 }
 
 pub fn terminate_child(child: &Child) -> io::Result<()> {
+    // generate_ctrl_event(true <- means send Ctrl+Break. with "false" it's supposed to be ctrl+c, but it just doesn't work at all
     match generate_ctrl_event(true, child.id()) {
         Ok(_) => return Ok(()),
         Err(e) => {
