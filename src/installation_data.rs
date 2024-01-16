@@ -1061,7 +1061,7 @@ impl InstallationsData {
                 let site_path = match process::Command::new(dest_dir.join(&venv_pybin_path))
                     .current_dir(dest_dir)
                     .arg("-c")
-                    .arg("import site;print(site.getsitepackages()[-1])")
+                    .arg("import site,sys;sys.stdout.reconfigure(encoding='utf-8');print(site.getsitepackages()[-1])")
                     .output()
                 {
                     Ok(status) => match String::from_utf8(status.stdout) {
