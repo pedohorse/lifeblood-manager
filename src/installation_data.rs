@@ -1019,6 +1019,27 @@ impl InstallationsData {
     ///
     fn helper_install_venv(dest_dir: &Path, requirements_path: &Path) -> Result<(), Error> {
         // if venv dir is present - skip creating venv
+
+        // in case of windows and "verbatim" paths - it seems that some parts of python,
+        // like venv, it seem to be getting wrong idea when verbatim path is given as current_dir
+        // so we need to clear this
+        #[cfg(windows)]
+        let dest_dir = &{
+            let tmp = dest_dir.to_str().unwrap();
+            if tmp.starts_with("\\\\?\\") {
+                Path::new(&tmp[4..])
+            } else {
+                dest_dir
+            }
+        };
+
+        let venv_pybin_name = if cfg!(windows) {
+            "python.exe"
+        } else {
+            "python"
+        };
+        let venv_pybin_path = Path::new("venv").join(VENV_BIN).join(venv_pybin_name);
+
         if !dest_dir.join("venv").exists() {
             if let Some(python_command) = Self::helper_get_python_command() {
                 let exit_status = match process::Command::new(python_command)
@@ -1036,10 +1057,11 @@ impl InstallationsData {
                 check_status!(exit_status);
 
                 // write pth file
-                let site_path = match process::Command::new(dest_dir.join("venv/bin/python"))
+                // TODO: maybe write to every path returned by getsitepackages ?
+                let site_path = match process::Command::new(dest_dir.join(&venv_pybin_path))
                     .current_dir(dest_dir)
                     .arg("-c")
-                    .arg("import site;print(site.getsitepackages()[0])")
+                    .arg("import site,sys;sys.stdout.reconfigure(encoding='utf-8');print(site.getsitepackages()[-1])")
                     .output()
                 {
                     Ok(status) => match String::from_utf8(status.stdout) {
@@ -1075,7 +1097,15 @@ impl InstallationsData {
                     .write(true)
                     .create(true)
                     .open(site_path.join("lifeblood.pth"))?;
-                writeln!(py_pth_file, "{}", if cfg!(unix) { "../../../..\n" } else { "..\\..\\..\n" } )?;
+                writeln!(
+                    py_pth_file,
+                    "{}",
+                    if cfg!(unix) {
+                        "../../../..\n"
+                    } else {
+                        "..\\..\\..\n"
+                    }
+                )?;
             } else {
                 // python not found, but we know what to do on windows in this case
                 if cfg!(windows) {
@@ -1088,26 +1118,23 @@ impl InstallationsData {
                 }
             }
         }
-        println!(
-            "venv python at {:?}",
-            dest_dir.join("venv").join(VENV_BIN).join("python")
-        );
+        println!("venv python at {:?}", venv_pybin_path);
+
         // run pip
-        let exit_status =
-            match process::Command::new(dest_dir.join("venv").join(VENV_BIN).join("python"))
-                .current_dir(dest_dir)
-                .arg("-m")
-                .arg("pip")
-                .arg("install")
-                .arg("-r")
-                .arg(requirements_path)
-                .status()
-            {
-                Ok(status) => status,
-                Err(e) => {
-                    return Err(Error::new(e.kind(), format!("error running pip: {}", e)));
-                }
-            };
+        let exit_status = match process::Command::new(dest_dir.join(&venv_pybin_path))
+            .current_dir(dest_dir)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("-r")
+            .arg(requirements_path)
+            .status()
+        {
+            Ok(status) => status,
+            Err(e) => {
+                return Err(Error::new(e.kind(), format!("error running pip: {}", e)));
+            }
+        };
         check_status!(exit_status);
 
         Ok(())
