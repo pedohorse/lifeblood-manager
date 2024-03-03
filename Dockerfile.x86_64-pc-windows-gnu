@@ -2,6 +2,8 @@ FROM ghcr.io/cross-rs/x86_64-pc-windows-gnu:edge
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN apt update
+
 RUN apt-get install --assume-yes --no-install-recommends \
     libx11-dev libxext-dev libxft-dev \
     libxinerama-dev libxcursor-dev \
