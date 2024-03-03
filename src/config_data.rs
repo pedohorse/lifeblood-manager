@@ -81,7 +81,7 @@ impl ConfigData {
         }
     }
 
-    fn validate_config_text(config_text: &str) -> Result<(), ConfigError> {
+    pub fn validate_config_text(config_text: &str) -> Result<(), ConfigError> {
         match config_text.parse::<toml::Table>() {
             Ok(_) => {
                 return Ok(());
