@@ -4,14 +4,20 @@ on:
   release:
     types:
       - published
+  workflow_call:
+    secrets:
+        TELEGRAM_INFO_BOT_ID:
+            description: 'telegram bot id'
+            required: true
+        TELEGRAM_INFO_CHANNEL_ID:
+            description: 'channel id'
+            required: true
 
 jobs:
   notify_telegram:
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-tags: true
       - run: sudo apt install jq
       - name: "post to telegram"
         shell: bash
@@ -20,13 +26,12 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_INFO_CHANNEL_ID }}
         run: |
           echo '#!/usr/bin/env bash' > send_update.sh
-          git fetch --tags 
           
-          echo '{"chat_id":'"$TELEGRAM_CHAT_ID"',"text":"' > info_message
+          echo '{"chat_id":'"$TELEGRAM_CHAT_ID"',"text":' > info_message
           (
             printf '🤖 Lifeblood-Manager update ${{ github.ref_name }}!\n\n'
             git tag -l --format='%(contents)' ${{ github.ref_name }}
-            printf "\n\n#manager" 
+            printf "\n\n#manager"
           ) | jq -Rsa . >> info_message
           echo -e \\n'#manager' >> info_message
           echo '}' >> info_message

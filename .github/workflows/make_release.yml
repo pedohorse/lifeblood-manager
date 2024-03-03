@@ -67,3 +67,11 @@ jobs:
         with:
           files: |
             artifacts/*/lifeblood-manager*
+
+  notify:
+    uses: ./.github/workflows/release-notify.yml
+    secrets:
+      TELEGRAM_INFO_BOT_ID: ${{ secrets.TELEGRAM_INFO_BOT_ID }}
+      TELEGRAM_INFO_CHANNEL_ID: ${{ secrets.TELEGRAM_INFO_CHANNEL_ID }}
+
+    needs: [ "release" ]
