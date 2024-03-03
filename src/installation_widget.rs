@@ -329,7 +329,7 @@ impl Widget for InstallationWidget {
             
             if let Err(e) = install_data.rename_version(ver_id, new_name) {
                 eprintln!("failed to rename! {}", e);
-                InfoDialog::show(popup_x, popup_y, &format!("failed to rename! {}", e));
+                InfoDialog::show(popup_x, popup_y, "error", &format!("failed to rename! {}", e));
             }
             drop(install_data);
             
@@ -414,6 +414,7 @@ impl Widget for InstallationWidget {
                         InfoDialog::show(
                             wind.x() + (wind.w() / 2) as i32 - 300,
                             wind.y() + (wind.h() / 2) as i32 - 100,
+                            "error",
                             &err_msg,
                         );
                     }
