@@ -3,7 +3,7 @@ use fltk::{
     input::FileInput, prelude::*, window::Window,
 };
 use lifeblood_manager::{
-    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks,
+    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks, StandardEnvResolverConfigWidget
 };
 use std::env::current_dir;
 use std::path::PathBuf;
@@ -43,6 +43,7 @@ impl MainWidget {
         let tabs = Tabs::default_fill(); //.with_size(128, 111);
         let (install_widget, _) = InstallationWidget::initialize();
         let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
+        let (env_widget, _) = StandardEnvResolverConfigWidget::initialize();
 
         tabs.end();
         tabs.resizable(&tab_header_flex);
@@ -54,6 +55,7 @@ impl MainWidget {
 
         widgets.push(install_widget);
         widgets.push(launch_widget);
+        widgets.push(env_widget);
 
         flex.end();
 
