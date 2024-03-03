@@ -1,9 +1,9 @@
 mod installation_data;
 mod running_process_data;
 mod launch_data;
-mod config_data;
-mod config_data_collection;
 mod proc;
+pub mod config_data;
+pub mod config_data_collection;
 pub use installation_data::{InstallationsData, InstalledVersion};
 pub use launch_data::LaunchControlData;
 pub use running_process_data::LaunchedProcess;
