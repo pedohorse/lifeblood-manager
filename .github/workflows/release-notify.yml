@@ -12,6 +12,16 @@ on:
         TELEGRAM_INFO_CHANNEL_ID:
             description: 'channel id'
             required: true
+    inputs:
+      message_append:
+        type: string
+        default: ""
+      message_prepend:
+        type: string
+        default: ""
+      message_body_command:
+        type: string
+        default: ""
 
 jobs:
   notify_telegram:
@@ -24,16 +34,19 @@ jobs:
         env:
           TELEGRAM_BOT_SECRET: ${{ secrets.TELEGRAM_INFO_BOT_ID }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_INFO_CHANNEL_ID }}
+          MSG_PREPEND: ${{ inputs.message_prepend }}
+          MSG_APPEND: ${{ inputs.message_append }}
         run: |
+          git fetch --tags --force
+          
           echo '#!/usr/bin/env bash' > send_update.sh
           
           echo '{"chat_id":'"$TELEGRAM_CHAT_ID"',"text":' > info_message
           (
-            printf '🤖 Lifeblood-Manager update ${{ github.ref_name }}!\n\n'
-            git tag -l --format='%(contents)' ${{ github.ref_name }}
-            printf "\n\n#manager"
+            printf "$MSG_PREPEND"
+            ${{ inputs.message_body_command }}
+            printf "$MSG_APPEND"
           ) | jq -Rsa . >> info_message
-          echo -e \\n'#manager' >> info_message
           echo '}' >> info_message
           
           # only for curl8
