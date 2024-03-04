@@ -1,17 +1,14 @@
 name: send notifications
 
 on:
-  release:
-    types:
-      - published
   workflow_call:
     secrets:
-        TELEGRAM_INFO_BOT_ID:
-            description: 'telegram bot id'
-            required: true
-        TELEGRAM_INFO_CHANNEL_ID:
-            description: 'channel id'
-            required: true
+      TELEGRAM_INFO_BOT_ID:
+        description: 'telegram bot id'
+        required: true
+      TELEGRAM_INFO_CHANNEL_ID:
+        description: 'channel id'
+        required: true
     inputs:
       message_append:
         type: string
