@@ -73,5 +73,9 @@ jobs:
     secrets:
       TELEGRAM_INFO_BOT_ID: ${{ secrets.TELEGRAM_INFO_BOT_ID }}
       TELEGRAM_INFO_CHANNEL_ID: ${{ secrets.TELEGRAM_INFO_CHANNEL_ID }}
+    with:
+      message_prepend: "🤖 Lifeblood-Manager update ${{ github.ref_name }}!\n\n"
+      message_body_command: "git tag -l --format='%(contents)' ${{ github.ref_name }}"
+      message_append: "\n\nhttps://github.com/${{ github.repository}}/releases/tag/${{ github.ref_name }}\n\n#manager"
 
     needs: [ "release" ]
