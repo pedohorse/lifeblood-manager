@@ -1,0 +1,13 @@
+name: test checkout
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git fetch --tags --force
+          git tag -l --format='%(contents)' ${{ github.ref_name }}
