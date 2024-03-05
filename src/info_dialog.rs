@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::{cell::RefCell, rc::Rc};
 
 use fltk::{
@@ -20,10 +21,12 @@ pub struct ChoiceDialog {}
 
 impl InfoDialog {
     pub fn show(x: i32, y: i32, title: &str, text: &str) {
+        let width = max(300, fltk::draw::measure(text, true).0 + 50);
+
         let mut win = Window::default()
-            .with_size(400, 100)
+            .with_size(width, 100)
             .with_label(title)
-            .with_pos(x, y);
+            .with_pos(x - width / 2, y);
         let group = Flex::default_fill().column();
         Frame::default().with_label(text);
         let mut line = Flex::default().row();
@@ -50,10 +53,11 @@ impl ChoiceDialog {
     pub fn show(x: i32, y: i32, title: &str, text: &str, choice1: &str, choice2: &str) -> bool {
         let result = Rc::new(RefCell::new(false));
 
+        let width = max(300, fltk::draw::measure(text, true).0 + 50);
         let mut win = Window::default()
-            .with_size(400, 100)
+            .with_size(width + 50, 100)
             .with_label(title)
-            .with_pos(x, y);
+            .with_pos(x - width / 2, y);
         let group = Flex::default_fill().column();
         Frame::default().with_label(text);
         let mut line = Flex::default().row();

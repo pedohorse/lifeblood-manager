@@ -1,3 +1,4 @@
+use semver::Version;
 use std::fs::File;
 use std::{
     fmt::Debug,
@@ -22,7 +23,7 @@ pub struct ConfigData {
 
 pub enum ConfigError {
     SyntaxError(String, Option<std::ops::Range<usize>>),
-    SchemaError,
+    SchemaError(String),
 }
 
 impl Debug for ConfigError {
@@ -38,7 +39,7 @@ impl Debug for ConfigError {
                     f.write_fmt(format_args!("Syntax Error ({})", message))
                 }
             }
-            Self::SchemaError => f.write_str("Schema Error"),
+            Self::SchemaError(err) => f.write_fmt(format_args!("Schema Error: {}", err)),
         }
     }
 }
@@ -83,7 +84,34 @@ impl ConfigData {
 
     pub fn validate_config_text(config_text: &str) -> Result<(), ConfigError> {
         match config_text.parse::<toml::Table>() {
-            Ok(_) => {
+            Ok(table_root) => {
+                // perform simple schema check
+                if let Some(packages) = table_root.get("packages") {
+                    if !packages.is_table() {
+                        return Err(ConfigError::SchemaError(
+                            "'package' key must be a mapping".to_string(),
+                        ));
+                    }
+                    for (pkg_name, pkg_ver) in packages.as_table().unwrap().iter() {
+                        // pkg_ver is supposed to be semantic version string
+                        if let Some(ver_map) = pkg_ver.as_table() {
+                            // now check version keys
+                            for ver_str in ver_map.keys() {
+                                if let Err(_) = Version::parse(ver_str) {
+                                    return Err(ConfigError::SchemaError(format!(
+                                        "package {} version {} is not a valid semantic version",
+                                        pkg_name, ver_str
+                                    )));
+                                }
+                            }
+                        } else {
+                            return Err(ConfigError::SchemaError(format!(
+                                "package {} has version that is not a version mapping, but {:?}",
+                                pkg_name, pkg_ver
+                            )));
+                        }
+                    }
+                }
                 return Ok(());
             }
             Err(e) => {
