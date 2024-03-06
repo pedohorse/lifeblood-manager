@@ -3,7 +3,8 @@ use fltk::{
     input::FileInput, prelude::*, window::Window,
 };
 use lifeblood_manager::{
-    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks, StandardEnvResolverConfigWidget
+    theme::*, InstallationWidget, InstallationsData, LaunchWidget, StandardEnvResolverConfigWidget,
+    Widget, WidgetCallbacks,
 };
 use std::env::current_dir;
 use std::path::PathBuf;
@@ -124,6 +125,13 @@ fn main() {
     } else {
         panic!("failed to get current dir!");
     };
+
+    if let Some(qt_scale_factor) = option_env!("QT_SCALE_FACTOR") {
+        let qt_scale_factor = qt_scale_factor.parse::<f32>().unwrap_or(1.0);
+        app::Screen::all_screens()
+            .iter_mut()
+            .for_each(|screen| screen.set_scale(screen.scale() * qt_scale_factor));
+    }
 
     let app = app::App::default().with_scheme(app::Scheme::Gtk);
     app::set_background_color(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2]);
