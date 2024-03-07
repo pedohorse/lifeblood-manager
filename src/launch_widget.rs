@@ -139,10 +139,12 @@ impl Widget for LaunchWidget {
 
         // main launch widget
         let mut widget = LaunchWidget {
-            launch_datas: vec![scheduler_launch_data.clone(),
-            wpool_launch_data.clone(),
-            viewer_launch_data.clone(),
-            config_autodetect_launch_data.clone()],
+            launch_datas: vec![
+                scheduler_launch_data.clone(),
+                wpool_launch_data.clone(),
+                viewer_launch_data.clone(),
+                config_autodetect_launch_data.clone(),
+            ],
         };
         widget.make_launch_buttons(&mut flex, scheduler_launch_data);
         widget.make_launch_buttons(&mut flex, wpool_launch_data);
