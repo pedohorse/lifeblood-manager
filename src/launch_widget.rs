@@ -14,9 +14,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 pub struct LaunchWidget {
-    scheduler_launch_data: Rc<RefCell<LaunchControlData>>,
-    worker_pool_launch_data: Rc<RefCell<LaunchControlData>>,
-    viewer_launch_data: Rc<RefCell<LaunchControlData>>,
+    launch_datas: Vec<Rc<RefCell<LaunchControlData>>>,
 }
 
 impl WidgetCallbacks for LaunchWidget {
@@ -25,15 +23,11 @@ impl WidgetCallbacks for LaunchWidget {
         _path: &PathBuf,
         install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) {
-        self.scheduler_launch_data
-            .borrow_mut()
-            .install_location_changed(install_data);
-        self.worker_pool_launch_data
-            .borrow_mut()
-            .install_location_changed(install_data);
-        self.viewer_launch_data
-            .borrow_mut()
-            .install_location_changed(install_data);
+        for launch_data in self.launch_datas.iter_mut() {
+            launch_data
+                .borrow_mut()
+                .install_location_changed(install_data);
+        }
     }
 }
 
@@ -131,16 +125,29 @@ impl Widget for LaunchWidget {
                 Some("--loglevel"),
             )]),
         )));
+        let config_autodetect_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
+            None,
+            "auto-generate environment resolver config",
+            if cfg!(unix) {
+                "./lifeblood"
+            } else {
+                "./lifeblood.cmd"
+            },
+            vec!["resolver", "generate"],
+            None,
+        )));
 
         // main launch widget
         let mut widget = LaunchWidget {
-            scheduler_launch_data: scheduler_launch_data.clone(),
-            worker_pool_launch_data: wpool_launch_data.clone(),
-            viewer_launch_data: viewer_launch_data.clone(),
+            launch_datas: vec![scheduler_launch_data.clone(),
+            wpool_launch_data.clone(),
+            viewer_launch_data.clone(),
+            config_autodetect_launch_data.clone()],
         };
         widget.make_launch_buttons(&mut flex, scheduler_launch_data);
         widget.make_launch_buttons(&mut flex, wpool_launch_data);
         widget.make_launch_buttons(&mut flex, viewer_launch_data);
+        widget.make_launch_buttons(&mut flex, config_autodetect_launch_data);
 
         flex.end();
         tab_header.end();
