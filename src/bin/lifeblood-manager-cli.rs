@@ -2,7 +2,7 @@ use lifeblood_manager::InstallationsData;
 use std::{
     env::{self, Args},
     io::Error,
-    path::PathBuf,
+    path::PathBuf, str::FromStr,
 };
 
 const MAIN_HELP_MESSAGE: &str = "\
@@ -124,7 +124,7 @@ fn process_installs_list(args: Args) -> Result<(), Error> {
 fn process_installs_new(args: Args) -> Result<(), Error> {
     let mut state = InstallArgsNewParsingState::ExpectPathOrFlag;
     let mut branch = "dev".to_owned();
-    let mut base_path = PathBuf::new();
+    let mut base_path = PathBuf::from(".");
     let mut do_viewer = true;
 
     for arg in args {
@@ -134,7 +134,7 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
             }
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) if arg == "--no-viewer" => {
                 do_viewer = false;
-                state = InstallArgsNewParsingState::NotExpectingAnything;
+                state = InstallArgsNewParsingState::ExpectPathOrFlag;
             }
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) => {
                 base_path = PathBuf::from(arg);
