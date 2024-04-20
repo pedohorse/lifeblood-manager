@@ -1,8 +1,6 @@
 use lifeblood_manager::InstallationsData;
 use std::{
-    env::{self, Args},
-    io::Error,
-    path::PathBuf, str::FromStr,
+    env::{self, Args}, f32::consts::E, io::Error, path::PathBuf, str::FromStr
 };
 
 const MAIN_HELP_MESSAGE: &str = "\
@@ -24,13 +22,20 @@ fn main() -> Result<(), Error> {
     let command = args.next().unwrap(); // we just checked len, so this can't fail
 
     match command.as_str() {
-        "installs" => process_installs(args),
+        "installs" => match process_installs(args) {
+            Err(e) => {
+                eprint!("operation failed: {}", e);
+                std::process::exit(1);
+            }
+            Ok(_) => ()
+        }
         _ => {
             eprintln!("invalid command");
             eprintln!("{}", MAIN_HELP_MESSAGE);
-            std::process::exit(1);
+            std::process::exit(2);
         }
-    }
+    };
+    Ok(())
 }
 
 const INSTALL_HELP_MESSAGE: &str = "\
@@ -40,6 +45,7 @@ Usage:
     Sub-Commangs:
         - list
         - new
+        - set_current
 ";
 
 fn process_installs(mut args: Args) -> Result<(), Error> {
@@ -53,6 +59,7 @@ fn process_installs(mut args: Args) -> Result<(), Error> {
     match subcommand.as_str() {
         "list" => process_installs_list(args),
         "new" => process_installs_new(args),
+        "set_current" => process_installs_set_current(args),
         x => {
             eprintln!("unknown subcommand '{}'", x);
             eprintln!("{}", INSTALL_HELP_MESSAGE);
@@ -69,6 +76,12 @@ enum InstallArgsListParsingState {
 enum InstallArgsNewParsingState {
     ExpectPathOrFlag,
     ExpectingBranch,
+    NotExpectingAnything,
+}
+
+enum InstallSetCurrentParsingState {
+    ExpectIndex,
+    ExpectPath,
     NotExpectingAnything,
 }
 
@@ -93,7 +106,7 @@ fn help_get_installs_from_dir(base_path: PathBuf) -> InstallationsData {
 
 fn process_installs_list(args: Args) -> Result<(), Error> {
     let mut state = InstallArgsListParsingState::ExpectPathOrFlag;
-    let mut base_path = PathBuf::new();
+    let mut base_path = PathBuf::from(".");
 
     for arg in args {
         match (state, arg) {
@@ -154,14 +167,76 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
 
     let mut installs = help_get_installs_from_dir(base_path);
 
-    match installs.download_new_version(&branch, do_viewer) {
-        Ok(_) => {
-            println!("New version downloaded and set current");
+    let new_ver_index = match installs.download_new_version(&branch, do_viewer) {
+        Ok(i) => {
+            println!("New version downloaded");
+            i
         }
         Err(e) => {
             eprintln!("Failed to get latest version: {}", e);
+            return Err(e);
+        }
+    };
+    match installs.make_version_current(new_ver_index) {
+        Ok(_) => {
+            println!("New version is set as current");
+        }
+        Err(e) => {
+            eprintln!("Failed to set new version as current: {}", e);
+            list_installs(&installs);
+            return Err(e);
         }
     }
+
+    list_installs(&installs);
+
+    Ok(())
+}
+
+fn process_installs_set_current(args: Args) -> Result<(), Error> {
+    let mut state = InstallSetCurrentParsingState::ExpectIndex;
+    let mut base_path = PathBuf::from(".");
+    let mut index: usize = 0;
+    let mut index_provided: bool = false;
+
+    for arg in args {
+        match (state, arg) {
+            (InstallSetCurrentParsingState::ExpectIndex, arg) => {
+                index = match usize::from_str(&arg) {
+                    Ok(i) => i,
+                    Err(_) => {
+                        return Err(Error::new(std::io::ErrorKind::InvalidData, "given index is not an integer"));
+                    }
+                };
+                index_provided = true;
+                state = InstallSetCurrentParsingState::ExpectPath;
+            }
+            (InstallSetCurrentParsingState::ExpectPath, arg) => {
+                base_path = PathBuf::from(arg);
+                state = InstallSetCurrentParsingState::NotExpectingAnything;
+            }
+            (InstallSetCurrentParsingState::NotExpectingAnything, _) => {
+                eprintln!("not expecting any more arguments after base_path");
+                eprintln!("{}", INSTALL_HELP_MESSAGE);
+                std::process::exit(2);
+            }
+        }
+    }
+
+    let mut installs = help_get_installs_from_dir(base_path.clone());
+
+    if !index_provided {
+        index = installs.version_count();
+        if index > 0 {
+            index -= 1;
+        }
+    }
+
+    if index >= installs.version_count() {
+        return Err(Error::new(std::io::ErrorKind::InvalidData, "version index out of range"));
+    }
+
+    installs.make_version_current(index)?;
 
     list_installs(&installs);
 
@@ -177,7 +252,8 @@ fn list_installs(installs: &InstallationsData) {
     println!("");
     for (i, ver) in installs.iter_versions().enumerate().rev() {
         println!(
-            "{} | {} | {} | {}",
+            "{:3} | {} | {} | {} | {}",
+            i,
             if installs.current_version_index() == i {
                 "current"
             } else {
