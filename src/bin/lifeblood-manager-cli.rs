@@ -1,6 +1,9 @@
 use lifeblood_manager::InstallationsData;
 use std::{
-    env::{self, Args}, f32::consts::E, io::Error, path::PathBuf, str::FromStr
+    env::{self, Args},
+    io::Error,
+    path::PathBuf,
+    str::FromStr,
 };
 
 const MAIN_HELP_MESSAGE: &str = "\
@@ -27,8 +30,8 @@ fn main() -> Result<(), Error> {
                 eprint!("operation failed: {}", e);
                 std::process::exit(1);
             }
-            Ok(_) => ()
-        }
+            Ok(_) => (),
+        },
         _ => {
             eprintln!("invalid command");
             eprintln!("{}", MAIN_HELP_MESSAGE);
@@ -205,7 +208,10 @@ fn process_installs_set_current(args: Args) -> Result<(), Error> {
                 index = match usize::from_str(&arg) {
                     Ok(i) => i,
                     Err(_) => {
-                        return Err(Error::new(std::io::ErrorKind::InvalidData, "given index is not an integer"));
+                        return Err(Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "given index is not an integer",
+                        ));
                     }
                 };
                 index_provided = true;
@@ -233,7 +239,10 @@ fn process_installs_set_current(args: Args) -> Result<(), Error> {
     }
 
     if index >= installs.version_count() {
-        return Err(Error::new(std::io::ErrorKind::InvalidData, "version index out of range"));
+        return Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            "version index out of range",
+        ));
     }
 
     installs.make_version_current(index)?;
