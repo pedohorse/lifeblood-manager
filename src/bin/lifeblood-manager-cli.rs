@@ -259,6 +259,9 @@ fn list_installs(installs: &InstallationsData) {
         println!("    It's recommended to choose an empty directory for lifeblood installations");
     }
     println!("");
+    if installs.version_count() == 0 {
+        println!("No installations found")
+    }
     for (i, ver) in installs.iter_versions().enumerate().rev() {
         println!(
             "{:3} | {} | {} | {} | {}",
