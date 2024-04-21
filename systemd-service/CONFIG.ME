@@ -1,0 +1,12 @@
+## You can override install variables by uncommenting section below
+#[all.install]
+#SERVICE_USER=differentuser
+#SERVICE_GROUP=differentuser
+#INSTALL_BASE=/some/special/place
+
+[worker.service]
+ReadWritePaths=-/mnt
+
+[scheduler.service]
+ReadWritePaths=-/mnt
+

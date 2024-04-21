@@ -1,0 +1,44 @@
+[Unit]
+Description=Lifeblood Scheduler service
+Wants=network.target
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+ExecStart={install_dir}/lifeblood {exec_args}
+Restart=on-failure
+Environment=LIFEBLOOD_CONFIG_LOCATION=%E/lifeblood
+Environment=LIFEBLOOD_LOG_LOCATION=%L/lifeblood
+
+User={service_user}
+
+StateDirectory=lifeblood
+LogsDirectory=lifeblood
+ConfigurationDirectory=lifeblood
+
+RemoveIPC=true
+X-StopIfChanged=false
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+RestrictNamespaces=~ipc net user uts
+RestrictSUIDSGID=true
+RestrictAddressFamilies=~AF_UNIX
+IPAddressAllow=any
+IPAddressDeny=any
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateDevices=true
+InaccessiblePaths=/home
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectSystem=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+SystemCallFilter=~@clock @cpu-emulation @debug @module @mount @obsolete @privileged @raw-io @reboot @swap
