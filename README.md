@@ -20,3 +20,7 @@ Easily try newest version, and easily fall back to the previous one if things go
 
 * `PYTHON_BIN` env is used to locate python to be used with new versions being installed
 
+## systemd service
+
+This repository also provides a script to automate installation of lifeblood as systemd service,
+check [systemd-service](systemd-service) directory for more information
