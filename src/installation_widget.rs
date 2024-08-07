@@ -377,6 +377,7 @@ impl Widget for InstallationWidget {
                 Some(x) => x,
                 None => DEFAULT_BRANCH.to_owned(),
             };
+            let ignore_system_python = ignore_system_python_checkbox.value();
 
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
@@ -385,11 +386,17 @@ impl Widget for InstallationWidget {
                         Some(ref mut mutexed_data) => {
                             let mut data = lock_install_data(&mutexed_data);
                             // if checkbox is set - we don't try to locate python
-                            let path_to_python = if ignore_system_python_checkbox.value() {
+                            println!("initiating new version installation");
+                            let path_to_python = if ignore_system_python {
                                 None
                             } else {
                                 get_python_command()
                             };
+
+                            if let Some(ref path) = path_to_python {
+                                println!("using python: {:?}", path);
+                            }
+                            
                             // download latest
                             let new_ver = match data.download_new_version(&branch, true, path_to_python.as_deref()) {
                                 Ok(idx) => {
