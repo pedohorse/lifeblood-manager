@@ -1347,7 +1347,10 @@ impl InstallationsData {
                     #[cfg(windows)]
                     if code == 9009 {
                         // no idea - special windows exic tode meaning command not found?
-                        return None;
+                        return Err(Error::new(
+                            std::io::ErrorKind::NotFound,
+                            "failed to launch given python binary"
+                        ));
                     }
                     // otherwise - pass
                 } else {
