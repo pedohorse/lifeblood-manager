@@ -1,4 +1,5 @@
 use chrono::prelude::*;
+use semver::{Version, VersionReq};
 use core::str;
 use std::fs::File;
 use std::io::{prelude::*, BufWriter};
@@ -916,7 +917,14 @@ impl InstallationsData {
             } else {
                 return Err(Error::new(
                     std::io::ErrorKind::Unsupported,
-                    "given python version is not supported"
+                    format!(
+                        "given python version is not supported. supported: {}",
+                        supported_python_versions
+                            .iter()
+                            .map(|x| format!("{}.{}", x.0, x.1))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ),
                 ))
             }
         }
@@ -1016,8 +1024,46 @@ impl InstallationsData {
     /// extracts supported python versions from given setup.cfg file
     /// 
     fn helper_get_pyvers_from_setupcfg(path: &Path) -> Result<Vec<(u32, u32)>, Error> {
-        // TODO: implement this function !!
-        return Ok(vec![(3, 8), (3, 9), (3, 10)]);
+        let mut buffer = String::new();
+        match fs::File::open(path) {
+            Ok(mut file) => {
+                if let Err(e) = file.read_to_string(&mut buffer) {
+                    eprintln!("failed to read setup.cfg");
+                    return Err(e)
+                }
+            },
+            Err(e) => {
+                eprintln!("failed to read setup.cfg");
+                return Err(e);
+            }
+        };
+
+        let mut supported_vers = Vec::new();
+
+        for line in buffer.lines() {
+            let line = line.trim();
+            if let Some((key, val)) = line.split_once("=") {
+                if key.trim() != "python_requires" {
+                    continue;
+                }
+
+                if let Ok(ver_req) = VersionReq::parse(val.trim()) {
+                    for ver in (8..30 as u64).map(|x| Version::new(3, x, 0)) {
+                        if ver_req.matches(&ver) {
+                            supported_vers.push((ver.major as u32, ver.minor as u32));
+                        }
+                    }
+                    break;
+                } else {
+                    return Err(Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "failed to parse python_requires from setup.cfg"
+                        ))
+                }
+            }
+        }
+
+        return Ok(supported_vers);
     }
 
     ///
