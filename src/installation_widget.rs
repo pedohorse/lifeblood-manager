@@ -2,6 +2,8 @@ use crate::theme::*;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
+use crate::installation_helpers::get_python_command;
+use fltk::button::CheckButton;
 use fltk::dialog;
 use fltk::misc::InputChoice;
 use fltk::{
@@ -130,8 +132,16 @@ impl Widget for InstallationWidget {
         installations_table.end();
 
         // buttons
+        let mut control_buttons_group_vertical = Flex::default().column();
+        flex.fixed(&control_buttons_group_vertical, (1.4*(ITEM_HEIGHT as f32)) as i32);
+
+        let upper_control_row = Flex::default().row();
+        control_buttons_group_vertical.fixed(&upper_control_row, (0.4*(ITEM_HEIGHT as f32)) as i32);
+        let ignore_system_python_checkbox = CheckButton::default().with_label("ignore system python");
+        upper_control_row.end();
+
         let mut version_control_flex = Flex::default().row();
-        flex.fixed(&version_control_flex, ITEM_HEIGHT);
+        control_buttons_group_vertical.fixed(&version_control_flex, ITEM_HEIGHT);
         let mut new_install_btn = Button::default().with_label("download freshest");
         version_control_flex.fixed(&new_install_btn, 150);
         let mut branch_selector = InputChoice::default();
@@ -143,6 +153,8 @@ impl Widget for InstallationWidget {
         version_control_flex.fixed(&rename_ver_btn, 130);
         version_control_flex.fixed(&make_current_btn, 230);
         version_control_flex.end();
+
+        control_buttons_group_vertical.end();
 
         flex.end();
         tab_header.end();
@@ -365,6 +377,7 @@ impl Widget for InstallationWidget {
                 Some(x) => x,
                 None => DEFAULT_BRANCH.to_owned(),
             };
+            let ignore_system_python = ignore_system_python_checkbox.value();
 
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
@@ -372,8 +385,20 @@ impl Widget for InstallationWidget {
                     match guard.install_data {
                         Some(ref mut mutexed_data) => {
                             let mut data = lock_install_data(&mutexed_data);
+                            // if checkbox is set - we don't try to locate python
+                            println!("initiating new version installation");
+                            let path_to_python = if ignore_system_python {
+                                None
+                            } else {
+                                get_python_command()
+                            };
+
+                            if let Some(ref path) = path_to_python {
+                                println!("using python: {:?}", path);
+                            }
+                            
                             // download latest
-                            let new_ver = match data.download_new_version(&branch, true) {
+                            let new_ver = match data.download_new_version(&branch, true, path_to_python.as_deref()) {
                                 Ok(idx) => {
                                     // TODO: result process somehow
                                     idx

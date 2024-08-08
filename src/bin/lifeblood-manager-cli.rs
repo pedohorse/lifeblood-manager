@@ -1,3 +1,4 @@
+use lifeblood_manager::installation_helpers::get_python_command;
 use lifeblood_manager::InstallationsData;
 use std::{
     env::{self, Args},
@@ -142,6 +143,7 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
     let mut branch = "dev".to_owned();
     let mut base_path = PathBuf::from(".");
     let mut do_viewer = true;
+    let mut ignore_system_python = false;
 
     for arg in args {
         match (state, arg) {
@@ -150,6 +152,12 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
             }
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) if arg == "--no-viewer" => {
                 do_viewer = false;
+                state = InstallArgsNewParsingState::ExpectPathOrFlag;
+            }
+            (InstallArgsNewParsingState::ExpectPathOrFlag, arg)
+                if arg == "--ignore-system-python" =>
+            {
+                ignore_system_python = true;
                 state = InstallArgsNewParsingState::ExpectPathOrFlag;
             }
             (InstallArgsNewParsingState::ExpectPathOrFlag, arg) => {
@@ -168,18 +176,25 @@ fn process_installs_new(args: Args) -> Result<(), Error> {
         }
     }
 
+    let path_to_python = if ignore_system_python {
+        None
+    } else {
+        get_python_command()
+    };
+
     let mut installs = help_get_installs_from_dir(base_path);
 
-    let new_ver_index = match installs.download_new_version(&branch, do_viewer) {
-        Ok(i) => {
-            println!("New version downloaded");
-            i
-        }
-        Err(e) => {
-            eprintln!("Failed to get latest version: {}", e);
-            return Err(e);
-        }
-    };
+    let new_ver_index =
+        match installs.download_new_version(&branch, do_viewer, path_to_python.as_deref()) {
+            Ok(i) => {
+                println!("New version downloaded");
+                i
+            }
+            Err(e) => {
+                eprintln!("Failed to get latest version: {}", e);
+                return Err(e);
+            }
+        };
     match installs.make_version_current(new_ver_index) {
         Ok(_) => {
             println!("New version is set as current");

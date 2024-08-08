@@ -1,4 +1,6 @@
 use chrono::prelude::*;
+use semver::{Version, VersionReq};
+use core::str;
 use std::fs::File;
 use std::io::{prelude::*, BufWriter};
 use std::io::{BufReader, Error};
@@ -451,6 +453,7 @@ impl InstallationsData {
         &mut self,
         branch_name: &str,
         do_install_viewer: bool,
+        python_to_use: Option<&Path>,
     ) -> Result<usize, Error> {
         macro_rules! noop {
             ($($t:tt)*) => {};
@@ -547,7 +550,7 @@ impl InstallationsData {
 
         // install
         let dest_dir = self.base_path.join(&nice_name);
-        wraperr!("install phase", self.helper_install(&unzip_location, &dest_dir, do_install_viewer), cleanup!);
+        wraperr!("install phase", self.helper_install(&unzip_location, &dest_dir, do_install_viewer, python_to_use), cleanup!);
 
         // println!("imitating error!");
         // cleanup!();
@@ -778,6 +781,7 @@ impl InstallationsData {
         unzip_location: &Path,
         dest_dir: &Path,
         do_install_viewer: bool,
+        python_to_use: Option<&Path>,
     ) -> Result<(), Error> {
         let mut existing_dest: Option<PathBuf> = None;
 
@@ -900,14 +904,39 @@ impl InstallationsData {
             Self::helper_write_strings_to_file(reqs, &requirements_path_viewer)
         );
 
+        let supported_python_versions = wraperr!(
+            "getting supported python versions",
+            Self::helper_get_pyvers_from_setupcfg(
+                &inner_dir.join("pkg_lifeblood").join("setup.cfg"),
+            )
+        );
+
+        // Self::helper_get_python_command(supported_python_versions)
+        if let Some(python_command) = python_to_use {
+            if let Ok(true) = Self::helper_is_python_version_supported(python_command, &supported_python_versions) {
+            } else {
+                return Err(Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    format!(
+                        "given python version is not supported. supported: {}",
+                        supported_python_versions
+                            .iter()
+                            .map(|x| format!("{}.{}", x.0, x.1))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ),
+                ))
+            }
+        }
+
         wraperr!(
             "installing to venv",
-            Self::helper_install_venv(&dest_dir, &requirements_path)
+            Self::helper_install_venv(&dest_dir, &requirements_path, python_to_use)
         );
         if do_install_viewer {
             wraperr!(
                 "installing to venv",
-                Self::helper_install_venv(&dest_dir, &requirements_path_viewer)
+                Self::helper_install_venv(&dest_dir, &requirements_path_viewer, python_to_use)
             );
         }
 
@@ -991,6 +1020,54 @@ impl InstallationsData {
 
     ///
     /// helper func
+    /// 
+    /// extracts supported python versions from given setup.cfg file
+    /// 
+    fn helper_get_pyvers_from_setupcfg(path: &Path) -> Result<Vec<(u32, u32)>, Error> {
+        let mut buffer = String::new();
+        match fs::File::open(path) {
+            Ok(mut file) => {
+                if let Err(e) = file.read_to_string(&mut buffer) {
+                    eprintln!("failed to read setup.cfg");
+                    return Err(e)
+                }
+            },
+            Err(e) => {
+                eprintln!("failed to read setup.cfg");
+                return Err(e);
+            }
+        };
+
+        let mut supported_vers = Vec::new();
+
+        for line in buffer.lines() {
+            let line = line.trim();
+            if let Some((key, val)) = line.split_once("=") {
+                if key.trim() != "python_requires" {
+                    continue;
+                }
+
+                if let Ok(ver_req) = VersionReq::parse(val.trim()) {
+                    for ver in (8..30 as u64).map(|x| Version::new(3, x, 0)) {
+                        if ver_req.matches(&ver) {
+                            supported_vers.push((ver.major as u32, ver.minor as u32));
+                        }
+                    }
+                    break;
+                } else {
+                    return Err(Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "failed to parse python_requires from setup.cfg"
+                        ))
+                }
+            }
+        }
+
+        return Ok(supported_vers);
+    }
+
+    ///
+    /// helper func
     ///
     /// just write strings as we like it
     ///
@@ -1007,6 +1084,96 @@ impl InstallationsData {
 
     ///
     /// helper func
+    /// 
+    /// returns abs path from dest_dir to python binary inside expected venv
+    /// 
+    fn helper_get_venv_relative_python_bin_path(dest_dir: &Path) -> PathBuf {
+        let venv_pybin_name = if cfg!(windows) {
+            "python.exe"
+        } else {
+            "python"
+        };
+        return dest_dir.join("venv").join(VENV_BIN).join(venv_pybin_name);
+    }
+
+    ///
+    /// helper func
+    /// 
+    /// create venv, just that
+    /// 
+    fn helper_initialize_venv(dest_dir: &Path, python_command: &Path) -> Result<(), Error> {
+        let venv_pybin_path = Self::helper_get_venv_relative_python_bin_path(dest_dir);
+
+        let exit_status = match process::Command::new(python_command)
+                    .current_dir(dest_dir)
+                    .arg("-m")
+                    .arg("venv")
+                    .arg("venv")
+                    .status()
+        {
+            Ok(status) => status,
+            Err(e) => {
+                return Err(Error::new(e.kind(), format!("error running python: {}", e)));
+            }
+        };
+        check_status!(exit_status);
+
+        // write pth file
+        // TODO: maybe write to every path returned by getsitepackages ?
+        let site_path = match process::Command::new(&venv_pybin_path)
+            .current_dir(dest_dir)
+            .arg("-c")
+            .arg("import site,sys,os;sys.stdout.reconfigure(encoding='utf-8');print([x for x in site.getsitepackages() if os.path.exists(x) and x.startswith(os.getcwd())][-1])")
+            .output()
+        {
+            Ok(status) => match String::from_utf8(status.stdout) {
+                Ok(x) => {
+                    let path = x.trim();
+                    if path.is_empty() {
+                        return Err(Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "site path seem to be empty",
+                        ));
+                    }
+                    PathBuf::from(path)
+                }
+                Err(e) => {
+                    return Err(Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("failed to parse site packages path as utf-8: {:?}", e),
+                    ));
+                }
+            },
+            Err(e) => {
+                return Err(Error::new(e.kind(), format!("error running python: {}", e)));
+            }
+        };
+        if !site_path.exists() {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidData,
+                "site path does not exist",
+            ));
+        }
+
+        let mut py_pth_file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(site_path.join("lifeblood.pth"))?;
+        writeln!(
+            py_pth_file,
+            "{}",
+            if cfg!(unix) {
+                "../../../..\n"
+            } else {
+                "..\\..\\..\n"
+            }
+        )?;
+
+        return Ok(());
+    }
+
+    ///
+    /// helper func
     ///
     /// install venv phase
     ///
@@ -1017,7 +1184,7 @@ impl InstallationsData {
     /// it will be downloaded, minimal python venv will be handcrafted,
     /// get_pip will be used to get pip
     ///
-    fn helper_install_venv(dest_dir: &Path, requirements_path: &Path) -> Result<(), Error> {
+    fn helper_install_venv(dest_dir: &Path, requirements_path: &Path, python_to_use: Option<&Path>) -> Result<(), Error> {
         // if venv dir is present - skip creating venv
 
         // in case of windows and "verbatim" paths - it seems that some parts of python,
@@ -1033,79 +1200,11 @@ impl InstallationsData {
             }
         };
 
-        let venv_pybin_name = if cfg!(windows) {
-            "python.exe"
-        } else {
-            "python"
-        };
-        let venv_pybin_path = Path::new("venv").join(VENV_BIN).join(venv_pybin_name);
+        let venv_pybin_path = Self::helper_get_venv_relative_python_bin_path(dest_dir);
 
         if !dest_dir.join("venv").exists() {
-            if let Some(python_command) = Self::helper_get_python_command() {
-                let exit_status = match process::Command::new(python_command)
-                    .current_dir(dest_dir)
-                    .arg("-m")
-                    .arg("venv")
-                    .arg("venv")
-                    .status()
-                {
-                    Ok(status) => status,
-                    Err(e) => {
-                        return Err(Error::new(e.kind(), format!("error running python: {}", e)));
-                    }
-                };
-                check_status!(exit_status);
-
-                // write pth file
-                // TODO: maybe write to every path returned by getsitepackages ?
-                let site_path = match process::Command::new(dest_dir.join(&venv_pybin_path))
-                    .current_dir(dest_dir)
-                    .arg("-c")
-                    .arg("import site,sys,os;sys.stdout.reconfigure(encoding='utf-8');print([x for x in site.getsitepackages() if os.path.exists(x) and x.startswith(os.getcwd())][-1])")
-                    .output()
-                {
-                    Ok(status) => match String::from_utf8(status.stdout) {
-                        Ok(x) => {
-                            let path = x.trim();
-                            if path.is_empty() {
-                                return Err(Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    "site path seem to be empty",
-                                ));
-                            }
-                            PathBuf::from(path)
-                        }
-                        Err(e) => {
-                            return Err(Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                format!("failed to parse site packages path as utf-8: {:?}", e),
-                            ));
-                        }
-                    },
-                    Err(e) => {
-                        return Err(Error::new(e.kind(), format!("error running python: {}", e)));
-                    }
-                };
-                if !site_path.exists() {
-                    return Err(Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "site path does not exist",
-                    ));
-                }
-
-                let mut py_pth_file = fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open(site_path.join("lifeblood.pth"))?;
-                writeln!(
-                    py_pth_file,
-                    "{}",
-                    if cfg!(unix) {
-                        "../../../..\n"
-                    } else {
-                        "..\\..\\..\n"
-                    }
-                )?;
+            if let Some(python_command) = python_to_use {
+                Self::helper_initialize_venv(dest_dir, &python_command)?;
             } else {
                 // python not found, but we know what to do on windows in this case
                 if cfg!(windows) {
@@ -1113,7 +1212,7 @@ impl InstallationsData {
                 } else {
                     return Err(Error::new(
                         std::io::ErrorKind::NotFound,
-                        "python binary not found",
+                        "python cannot be automatically installed on this platform. Please install python system-wide or provide a custom one with PYTHON_BIN",
                     ));
                 }
             }
@@ -1121,7 +1220,7 @@ impl InstallationsData {
         println!("venv python at {:?}", venv_pybin_path);
 
         // run pip
-        let exit_status = match process::Command::new(dest_dir.join(&venv_pybin_path))
+        let exit_status = match process::Command::new(&venv_pybin_path)
             .current_dir(dest_dir)
             .arg("-m")
             .arg("pip")
@@ -1283,43 +1382,71 @@ impl InstallationsData {
 
     ///
     /// helper func
-    ///
-    /// find python executable
-    ///
-    /// usese PYTHON_BIN env variable
-    /// if not set - assumes standard `python` command
-    /// then tries to determine validity by simply running `python --version`
-    ///
-    /// if a valid working python was found - it's path is returned
-    /// otherwise - None
-    ///
-    fn helper_get_python_command() -> Option<PathBuf> {
-        // TODO: do checks, use env variable or smth
-        //  propagate errors
-        let pypath = if let Ok(x) = std::env::var("PYTHON_BIN") {
-            PathBuf::from(x)
-        } else {
-            PathBuf::from("python")
-        };
-
-        match process::Command::new(&pypath).arg("--version").status() {
-            // we don't care about result, just that it ran or no
-            Ok(s) => {
-                if let Some(code) = s.code() {
+    /// 
+    /// tests if given python is of supported version
+    /// (checks only MAJOR.MINOR versions)
+    /// 
+    fn helper_is_python_version_supported(python_bin: &Path, supported_python_versions: &[(u32, u32)]) -> Result<bool, Error> {
+        match process::Command::new(&python_bin).arg("--version").output() {
+            Ok(output) => {
+                if let Some(code) = output.status.code() {
                     #[cfg(windows)]
                     if code == 9009 {
                         // no idea - special windows exic tode meaning command not found?
-                        return None;
+                        return Err(Error::new(
+                            std::io::ErrorKind::NotFound,
+                            "failed to launch given python binary"
+                        ));
                     }
                     // otherwise - pass
                 } else {
-                    return None;
+                    return Err(Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "failed to launch given python binary"
+                    ));
+                }
+                // check python version compatibility
+                // in case anything goes not as expected - return None meaning version incompatible
+                if let Ok(ver_str) = str::from_utf8(&output.stdout) {
+                    // ver_str is expected to be of a form "Python X.Y.Z"
+                    // NOTE that Z may contain not just digits. and overall we should only rely on X.Y
+                    if let Some((_, suf)) = ver_str.split_once(' ') {
+                        // suf should be the X.Y.Z
+                        if let Ok(ver_parts) = suf.split('.').take(2).map(|s| u32::from_str_radix(s, 10)).collect::<Result<Vec<u32>, _>>() {
+                            if ver_parts.len() != 2 {
+                                eprintln!("python version {:?} is not supported", suf);
+                                return Ok(false)
+                            }
+                            let ver_tuple = (ver_parts[0], ver_parts[1]);
+                            if !supported_python_versions.iter().any(|v| *v == ver_tuple) {
+                                eprintln!("python version {:?} is not supported", ver_tuple);
+                                return Ok(false)
+                            }
+                        } else {
+                            eprintln!("python version {:?} is not supported", suf);
+                            return Ok(false)
+                        };
+                    } else {
+                        eprintln!("failed to parse python version {:?}", ver_str);
+                        return Err(Error::new(
+                            std::io::ErrorKind::Other,
+                            "unexpected python call output"
+                        ))
+                    }
+                } else {
+                    return Err(Error::new(
+                        std::io::ErrorKind::Other,
+                        "failed to parse python call output"
+                    ))
                 }
             }
-            Err(_) => return None,
-        }
+            Err(_) => return Err(Error::new(
+                std::io::ErrorKind::NotFound,
+                "failed to launch given python binary"
+            )),
+        };
 
-        Some(pypath)
+        Ok(true)
     }
 
     ///
