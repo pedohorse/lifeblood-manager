@@ -16,27 +16,32 @@ use std::process;
 pub fn get_python_command() -> Option<PathBuf> {
     // TODO: do checks, use env variable or smth
     //  propagate errors
-    let pypath = if let Ok(x) = std::env::var("PYTHON_BIN") {
-        PathBuf::from(x)
+    let mut pypaths = Vec::new();
+    if let Ok(x) = std::env::var("PYTHON_BIN") {
+        pypaths.push(PathBuf::from(x));
     } else {
-        PathBuf::from("python")
+        pypaths.push(PathBuf::from("python"));
+        pypaths.push(PathBuf::from("python3"));
     };
 
-    match process::Command::new(&pypath).arg("--version").output() {
-        Ok(output) => {
-            if let Some(code) = output.status.code() {
-                #[cfg(windows)]
-                if code == 9009 {
-                    // no idea - special windows exic tode meaning command not found?
-                    return None;
+    for pypath in pypaths {
+        match process::Command::new(&pypath).arg("--version").status() {
+            Ok(status) => {
+                if let Some(code) = status.code() {
+                    #[cfg(windows)]
+                    if code == 9009 {
+                        // no idea - special windows exic tode meaning command not found?
+                        continue;
+                    }
+                    // otherwise - pass
+                } else {
+                    continue;
                 }
-                // otherwise - pass
-            } else {
-                return None;
             }
+            Err(_) => continue,
         }
-        Err(_) => return None,
+        return Some(pypath)
     }
 
-    Some(pypath)
+    None
 }
