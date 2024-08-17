@@ -1,8 +1,10 @@
+use crate::config_data_collection::ConfigDataCollection;
 use crate::theme::*;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
 use crate::installation_helpers::get_python_command;
+use crate::wizard::Wizard;
 use fltk::button::CheckButton;
 use fltk::dialog;
 use fltk::misc::InputChoice;
@@ -133,11 +135,12 @@ impl Widget for InstallationWidget {
 
         // buttons
         let mut control_buttons_group_vertical = Flex::default().column();
-        flex.fixed(&control_buttons_group_vertical, (1.4*(ITEM_HEIGHT as f32)) as i32);
+        flex.fixed(&control_buttons_group_vertical, 2*ITEM_HEIGHT);
 
         let upper_control_row = Flex::default().row();
-        control_buttons_group_vertical.fixed(&upper_control_row, (0.4*(ITEM_HEIGHT as f32)) as i32);
+        control_buttons_group_vertical.fixed(&upper_control_row, ITEM_HEIGHT);
         let ignore_system_python_checkbox = CheckButton::default().with_label("ignore system python");
+        let mut wizard_button = Button::default().with_label("Config Wizard");
         upper_control_row.end();
 
         let mut version_control_flex = Flex::default().row();
@@ -378,6 +381,7 @@ impl Widget for InstallationWidget {
                 None => DEFAULT_BRANCH.to_owned(),
             };
             let ignore_system_python = ignore_system_python_checkbox.value();
+            let mut installation_succeeded = true;
 
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
@@ -434,6 +438,7 @@ impl Widget for InstallationWidget {
                 // join
                 match handle.join() {
                     Ok(Err(err_msg)) => {
+                        installation_succeeded = false;
                         eprintln!("{}", err_msg);
                         let wind = btn.window().unwrap();
                         InfoDialog::show(
@@ -451,6 +456,21 @@ impl Widget for InstallationWidget {
             });
 
             widget_to_cb.lock().unwrap().update_installation_table();
+
+            // if conditions are met - also run wizard
+            if installation_succeeded {
+                let config_root = ConfigDataCollection::default_config_location();
+                if !config_root.exists() {
+                    let mut wizard = Wizard::new(config_root);
+                    wizard.run();
+                }
+            }
+        });
+
+        // wizard callback
+        wizard_button.set_callback(|_| {
+            let mut wizard = Wizard::new(ConfigDataCollection::default_config_location());
+            wizard.run();
         });
 
         (widget, tab_header)
