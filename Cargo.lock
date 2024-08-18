@@ -730,6 +730,7 @@ dependencies = [
  "home",
  "rand",
  "semver",
+ "serde",
  "toml",
  "winconsole",
  "zip",

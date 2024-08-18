@@ -2,6 +2,7 @@ mod installation_data;
 mod running_process_data;
 mod launch_data;
 mod proc;
+mod wizard;
 pub mod config_data;
 pub mod installation_helpers;
 pub mod config_data_collection;

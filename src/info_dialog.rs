@@ -1,6 +1,8 @@
 use std::cmp::max;
 use std::{cell::RefCell, rc::Rc};
 
+use fltk::app::screen_size;
+use fltk::draw::measure;
 use fltk::{
     app::wait,
     button::Button,
@@ -20,6 +22,16 @@ pub struct InfoDialog {}
 pub struct ChoiceDialog {}
 
 impl InfoDialog {
+    pub fn show_in_center(title: &str, text: &str) {
+        let (x ,y) = screen_size();
+
+        let (text_w, text_h) = measure(text, false);
+        let popup_x = x as i32 / 2 - text_w / 2;
+        let popup_y = y as i32 / 2 - 50 - text_h / 2;
+
+        Self::show(popup_x, popup_y, title, text);
+    }
+
     pub fn show(x: i32, y: i32, title: &str, text: &str) {
         let width = max(300, fltk::draw::measure(text, true).0 + 50);
 
