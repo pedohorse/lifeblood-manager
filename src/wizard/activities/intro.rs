@@ -21,7 +21,7 @@ impl WizardActivityTrait for IntroActivity {
                 "\
         Welcome to the Lifeblood-Manager's initial config setup wizard!\n\
         \n\
-        I Am Ubik, and today I will help you with going through some simple\n\
+        I Am Wubik, and today I will help you with going through some simple\n\
         decisions that will help you with setting up initial config. \n\
         Lifeblood requires minimal configuration, things like where your DCC\n\
         software is installed in order for a worker to be able to run it.\n\
