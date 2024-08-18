@@ -1,3 +1,4 @@
+use fltk::enums::CallbackTrigger;
 use fltk::{
     app, button::Button, dialog::NativeFileChooser, frame::Frame, group::Flex, group::Tabs,
     input::FileInput, prelude::*, window::Window,
@@ -40,7 +41,7 @@ impl MainWidget {
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
 
-        let tabs = Tabs::default_fill(); //.with_size(128, 111);
+        let mut tabs = Tabs::default_fill(); //.with_size(128, 111);
         let (install_widget, _) = InstallationWidget::initialize();
         let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
         let (env_widget, _) = StandardEnvResolverConfigWidget::initialize();
@@ -66,6 +67,26 @@ impl MainWidget {
         }));
 
         // callbacks
+
+        // tab changed
+        tabs.set_trigger(CallbackTrigger::Changed); // according to docs, default is Released
+        tabs.set_callback({
+            let widget = widget.clone();
+            move |w| {
+                if !w.changed() {
+                    return;
+                }
+                let selected_wgt = if let Some(x) = w.value() {
+                    x
+                } else {
+                    return;
+                };
+                let tab_index = w.find(&selected_wgt) as usize;
+                
+                let sub_widgets = &widget.lock().unwrap().sub_widgets;
+                sub_widgets[tab_index].lock().unwrap().on_tab_selected();
+            }
+        });
 
         // base path input change callback
         let widget_to_cb = widget.clone();
