@@ -112,6 +112,12 @@ impl WidgetCallbacks for StandardEnvResolverConfigWidget {
     ) {
         // do nothing
     }
+
+    fn on_tab_selected(&mut self) {
+        if !self.has_unsaved_changes {
+            self.reload_config();
+        }
+    }
 }
 
 impl StandardEnvResolverConfigWidget {
