@@ -105,6 +105,10 @@ impl WidgetCallbacks for InstallationWidget {
             println!("failed to set path to {:?}", path);
         })
     }
+
+    fn on_tab_selected(&mut self) {
+        
+    }
 }
 
 impl Widget for InstallationWidget {

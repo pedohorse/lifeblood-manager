@@ -29,6 +29,10 @@ impl WidgetCallbacks for LaunchWidget {
                 .install_location_changed(install_data);
         }
     }
+
+    fn on_tab_selected(&mut self) {
+        
+    }
 }
 
 impl Widget for LaunchWidget {

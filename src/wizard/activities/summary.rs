@@ -85,6 +85,8 @@ impl SummaryActivity {
             "\
             <h1>Summary</h1>\
             \
+            <br>Note: existing config files will be overwritten!\
+            \
             <h3>Database location</h3>\
             {}
             {}

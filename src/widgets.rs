@@ -6,6 +6,7 @@ use fltk::group::Flex;
 
 pub trait WidgetCallbacks {
     fn install_location_changed(&mut self, path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>);
+    fn on_tab_selected(&mut self);
 }
 
 pub trait Widget : WidgetCallbacks {
