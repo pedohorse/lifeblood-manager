@@ -1,3 +1,5 @@
+pub const BUILD_INFO: &'static str = env!("LM_BUILD_VERSION");
+
 mod installation_data;
 mod running_process_data;
 mod launch_data;
