@@ -1,3 +1,5 @@
+pub const BUILD_INFO: &'static str = if let Some(x) = option_env!("LM_BUILD_VERSION") { x } else {"UNKNOWN BUILD"};
+
 mod installation_data;
 mod running_process_data;
 mod launch_data;

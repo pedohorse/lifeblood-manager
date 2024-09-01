@@ -1,5 +1,5 @@
 use lifeblood_manager::installation_helpers::get_python_command;
-use lifeblood_manager::InstallationsData;
+use lifeblood_manager::{InstallationsData, BUILD_INFO};
 use std::{
     env::{self, Args},
     io::Error,
@@ -10,6 +10,7 @@ use std::{
 const MAIN_HELP_MESSAGE: &str = "\
 Usage:
     lifeblood-manager-cli <command> <arguments>
+    lifeblood-manager-cli -v|--version
 
     Commangs:
         - installs
@@ -33,6 +34,10 @@ fn main() -> Result<(), Error> {
             }
             Ok(_) => (),
         },
+        "-v" | "--version" => {
+            println!("{}", BUILD_INFO);
+            std::process::exit(0);
+        }
         _ => {
             eprintln!("invalid command");
             eprintln!("{}", MAIN_HELP_MESSAGE);
