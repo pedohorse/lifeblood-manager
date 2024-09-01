@@ -23,5 +23,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - shell: bash
+        run: |
+          LM_BUILD_VERSION="TESTING $(git describe --always)"
+          echo "LM_BUILD_VERSION=$LM_BUILD_VERSION"
+          echo "LM_BUILD_VERSION=$LM_BUILD_VERSION" >> $GITHUB_ENV
       - name: run tests
         run: cargo test

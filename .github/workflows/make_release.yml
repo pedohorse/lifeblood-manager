@@ -31,6 +31,10 @@ jobs:
           sudo apt-get install --assume-yes --no-install-recommends \
           libxinerama-dev libxcursor-dev libxfixes-dev  libxft-dev \
           libpango1.0-dev libpangocairo-1.0-0 libpangoxft-1.0-0
+      - shell: bash
+        run: |
+          LM_BUILD_VERSION="${{ github.ref_name }}"
+          echo "LM_BUILD_VERSION=$LM_BUILD_VERSION" >> $GITHUB_ENV
       - name: build release cli
         run: cargo build --release --bin lifeblood-manager-cli
       - name: build release ui
