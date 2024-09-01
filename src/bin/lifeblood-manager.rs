@@ -4,7 +4,7 @@ use fltk::{
     input::FileInput, prelude::*, window::Window,
 };
 use lifeblood_manager::{
-    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks, StandardEnvResolverConfigWidget
+    theme::*, InstallationWidget, InstallationsData, LaunchWidget, Widget, WidgetCallbacks, StandardEnvResolverConfigWidget, BUILD_INFO
 };
 use std::env::current_dir;
 use std::path::PathBuf;
@@ -18,23 +18,32 @@ pub struct MainWidget {
 
 impl MainWidget {
     /// interface initialization helpers
-    fn init_base_path_input() -> (Button, FileInput, Flex) {
+    fn init_base_path_input(layout: &mut Flex) -> (Button, FileInput) {
+        // let mut build_info = Flex::default().row();
+        // Frame::default();
+        // let build_label = Frame::default().with_label(BUILD_INFO);
+        
+        // // 25% margin below is a pure guess
+        // build_info.fixed(&build_label, (fltk::draw::measure(BUILD_INFO, true).0 as f32 * 1.25) as i32);
+        // build_info.end();
+        // layout.fixed(&build_info, ITEM_HEIGHT);
+
         let mut base_input_flex = Flex::default().row();
         base_input_flex.fixed(&Frame::default().with_label("base directory"), 120);
         let base_input = FileInput::default();
         let browse_button = Button::default().with_label("browse");
         base_input_flex.fixed(&browse_button, 64);
         base_input_flex.end();
+        layout.fixed(&base_input_flex, ITEM_HEIGHT);
 
-        (browse_button, base_input, base_input_flex)
+        (browse_button, base_input)
     }
 
     pub fn new(path: &PathBuf) -> Arc<Mutex<Self>> {
         let mut flex = Flex::default_fill().column();
         // one shared install location
         // base path input
-        let (mut browse_button, base_input, base_input_flex) = Self::init_base_path_input();
-        flex.fixed(&base_input_flex, ITEM_HEIGHT);
+        let (mut browse_button, base_input) = Self::init_base_path_input(&mut flex);
 
         let path_warning_label = Frame::default().with_label("");
         flex.fixed(&path_warning_label, ITEM_HEIGHT);
@@ -155,7 +164,7 @@ fn main() {
 
     let mut wind = Window::default()
         .with_size(650, 600)
-        .with_label("Lifeblood Manager");
+        .with_label(&format!("Lifeblood Manager {}", BUILD_INFO));
 
     MainWidget::new(&current_dir);
 
