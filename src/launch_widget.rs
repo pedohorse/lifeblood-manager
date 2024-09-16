@@ -47,7 +47,7 @@ impl Widget for LaunchWidget {
         let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Scheduler",
-            "This should be run on ONLY ONE COMPUTER in your network.\
+            "This should be run on ONLY ONE COMPUTER in your network. \
              Scheduler is the main Lifeblood component, responsible for processing all tasks",
             if cfg!(unix) {
                 "./lifeblood"
@@ -118,7 +118,7 @@ impl Widget for LaunchWidget {
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Viewer",
-            "",
+            "Viewer is a UI to access scheduler over network. You can use it to set up task workflows and monitor task progression",
             if cfg!(unix) {
                 "./lifeblood_viewer"
             } else {
@@ -261,11 +261,11 @@ impl LaunchWidget {
         button_box.end();
 
         let info_box = Flex::default_fill().column();
-        let pid_label = Frame::default().with_label("");
+        let pid_label = Frame::default().with_label("not running");
         Frame::default().with_label(control_data.borrow().description()).set_align(Align::Left | Align::Inside | Align::Wrap);
         let mut info_label1 = Flex::default_fill().row();
         info_label1.fixed(&Frame::default().with_label("base:"), 48);
-        let info_label_running_root = Frame::default().with_label("not running");
+        let info_label_running_root = Frame::default().with_label("");
         info_label1.end();
         info_box.end();
 
@@ -306,18 +306,20 @@ impl LaunchWidget {
                 Ok(Some(status)) => {
                     let exit_code = status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
 
-                    match exit_code {
-                        0 => status_label_cl.set_label("⚪ finished OK"),
-                        -1 => status_label_cl.set_label("🔴 unhandled signal"),
-                        1 => status_label_cl.set_label("🔴 generic error"),
-                        2 => status_label_cl.set_label("🔴 argument error"),
-                        x => status_label_cl.set_label(&format!("🔴 error code: {}", x)),
+                    let status_text = match exit_code {
+                        0 => "⚪ finished OK",
+                        -1 => "🔴 unhandled signal",
+                        1 => "🔴 generic error",
+                        2 => "🔴 argument error",
+                        x => &format!("🔴 error code: {}", x),
                     };
+                    status_label_cl.set_label(status_text);
+                    status_label_cl.set_tooltip(status_text);
                     start_button_cl.activate();
                     stop_button_cl.deactivate();
                     Self::change_active_status_on_vec(&mut options_widgets_cl, true);
-                    info_label_running_root_cl.set_label("not running");
-                    pid_label_cl.set_label("");
+                    info_label_running_root_cl.set_label("");
+                    pid_label_cl.set_label("not running");
                 }
                 Err(e) => {
                     eprintln!("failed to check process status: {:?}, ignoring", e);
@@ -369,6 +371,7 @@ impl LaunchWidget {
                     eprintln!("failed to start process! {:?}", e);
                     let err = format!("🔴 failed to start {}: {}", data.command(), e.kind());
                     status_label_cl.set_label(&err);
+                    status_label_cl.set_tooltip(&err);
                     return;
                 }
             };
@@ -377,6 +380,7 @@ impl LaunchWidget {
             Self::change_active_status_on_vec(&mut options_widgets_cl, false);
             stop_button_cl.activate();
             status_label_cl.set_label("🟢 running");
+            status_label_cl.set_tooltip("running");
             pid_label_cl.set_label(&format!(
                 "pid: {}",
                 if let Some(pid) = data.process_pid() {
@@ -404,6 +408,7 @@ impl LaunchWidget {
                     return;
                 }
                 status_label_cl.set_label("🟠 terminating");
+                status_label_cl.set_tooltip("terminating...");
                 stop_button_cl.deactivate();
             };
         });
@@ -422,12 +427,14 @@ impl LaunchWidget {
                             start_button.deactivate();
                             stop_button.activate();
                             status_label.set_label("⚪ invalid");
+                            status_label.set_tooltip("installation location is not set or invalid");
                         }
                     } else {
                         if data.is_current_installation_set() {
                             start_button.activate();
                             stop_button.deactivate();
                             status_label.set_label("⚪ ready");
+                            status_label.set_tooltip("ready to launch");
                         }
                     }
                 },
