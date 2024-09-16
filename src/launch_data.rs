@@ -120,6 +120,7 @@ impl LaunchControlDataOption {
 pub struct LaunchControlData {
     _process: Option<LaunchedProcess>,
     _command_label: String,
+    _description: String,
     _command: String,
     _args: Vec<String>,
     _args_options: Vec<LaunchControlDataOption>,
@@ -133,6 +134,7 @@ impl LaunchControlData {
     pub fn new(
         installations: Option<&Arc<Mutex<InstallationsData>>>,
         command_label: &str,
+        description: &str,
         command: &str,
         args: Vec<&str>,
         args_options: Option<Vec<LaunchControlDataOption>>,
@@ -140,6 +142,7 @@ impl LaunchControlData {
         LaunchControlData {
             _process: None,
             _command_label: command_label.to_owned(),
+            _description: description.to_owned(),
             _command: command.to_owned(),
             _args: args.into_iter().map(|x| x.to_owned()).collect(),
             _args_options: if let Some(v) = args_options {
@@ -304,6 +307,10 @@ impl LaunchControlData {
 
     pub fn command_label(&self) -> &str {
         &self._command_label
+    }
+
+    pub fn description(&self) -> &str {
+        &self._description
     }
 
     pub fn last_run_exit_code(&self) -> Option<i32> {
