@@ -1,13 +1,14 @@
 use crate::launch_data::{
     LaunchControlData, LaunchControlDataOption, LaunchControlDataOptionValueStorage,
 };
+use crate::theme::ITEM_HEIGHT;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
-use fltk::button::Button;
-use fltk::enums::CallbackTrigger;
+use fltk::button::{self, Button};
+use fltk::enums::{Align, CallbackTrigger};
 use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
-use fltk::{app, frame::Frame, group::Flex, prelude::*};
+use fltk::{app, frame::Frame, group::Flex, group::Pack, prelude::*};
 use std::cell::RefCell;
 use std::path::{Component, PathBuf};
 use std::rc::Rc;
@@ -46,6 +47,8 @@ impl Widget for LaunchWidget {
         let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Scheduler",
+            "This should be run on ONLY ONE COMPUTER in your network.\
+             Scheduler is the main Lifeblood component, responsible for processing all tasks",
             if cfg!(unix) {
                 "./lifeblood"
             } else {
@@ -84,6 +87,7 @@ impl Widget for LaunchWidget {
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Worker Pool",
+            "Run this on EVERY computer that needs to do the work",
             if cfg!(unix) {
                 "./lifeblood"
             } else {
@@ -114,6 +118,7 @@ impl Widget for LaunchWidget {
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             None,
             "Viewer",
+            "",
             if cfg!(unix) {
                 "./lifeblood_viewer"
             } else {
@@ -129,17 +134,6 @@ impl Widget for LaunchWidget {
                 Some("--loglevel"),
             )]),
         )));
-        let config_autodetect_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
-            None,
-            "auto-generate environment resolver config",
-            if cfg!(unix) {
-                "./lifeblood"
-            } else {
-                "./lifeblood.cmd"
-            },
-            vec!["resolver", "generate"],
-            None,
-        )));
 
         // main launch widget
         let mut widget = LaunchWidget {
@@ -147,13 +141,11 @@ impl Widget for LaunchWidget {
                 scheduler_launch_data.clone(),
                 wpool_launch_data.clone(),
                 viewer_launch_data.clone(),
-                config_autodetect_launch_data.clone(),
             ],
         };
         widget.make_launch_buttons(&mut flex, scheduler_launch_data);
         widget.make_launch_buttons(&mut flex, wpool_launch_data);
         widget.make_launch_buttons(&mut flex, viewer_launch_data);
-        widget.make_launch_buttons(&mut flex, config_autodetect_launch_data);
 
         flex.end();
         tab_header.end();
@@ -168,12 +160,23 @@ impl LaunchWidget {
         parent_group: &mut Flex,
         control_data: Rc<RefCell<LaunchControlData>>,
     ) {
-        let flex = Flex::default_fill().row();
-        let mut group_height = 60;
+        let mut flex = Flex::default_fill().row();
+        flex.set_frame(fltk::enums::FrameType::RShadowBox);
+        let label_size = 26;
+        let main_margin = 8;
+        let margin = 2;  // a guess
+        flex.set_margin(main_margin);
+        let mut group_height = 2*main_margin + label_size + ITEM_HEIGHT + 4*margin;
 
-        let button_box = Flex::default_fill().column();
-        // running status
+        let mut button_box = Flex::default_fill().column();
+        
+        // name and running status
+        let heading_group = Flex::default_fill().row();
+        Frame::default().with_label(&control_data.borrow().command_label()).set_label_size(label_size);
         let mut status_label = Frame::default_fill().with_label("off");
+        heading_group.end();
+        button_box.fixed(&heading_group, label_size);
+
         // control options
         let mut options_widgets: Vec<Box<dyn WidgetExt>> = Vec::new();
         for (opt_idx, option) in control_data.borrow().args_options().iter().enumerate() {
@@ -181,7 +184,7 @@ impl LaunchWidget {
             if let Nothing = option.value() {
                 continue;
             }
-            group_height += 30;
+            group_height += ITEM_HEIGHT + 2*margin;
             let option_group = Flex::default_fill().row();
             options_widgets.push(Box::new(Frame::default_fill().with_label(option.label())));
 
@@ -247,17 +250,19 @@ impl LaunchWidget {
                 Nothing => (),
             }
             option_group.end();
+            button_box.fixed(&option_group, ITEM_HEIGHT);
         }
         // launch buttons
         let button_group = Flex::default_fill().row();
         let mut start_button = Button::default_fill().with_label("start");
         let mut stop_button = Button::default_fill().with_label("stop");
         button_group.end();
+        button_box.fixed(&button_group, ITEM_HEIGHT);
         button_box.end();
 
         let info_box = Flex::default_fill().column();
-        Frame::default().with_label(&control_data.borrow().command_label());
         let pid_label = Frame::default().with_label("");
+        Frame::default().with_label(control_data.borrow().description()).set_align(Align::Left | Align::Inside | Align::Wrap);
         let mut info_label1 = Flex::default_fill().row();
         info_label1.fixed(&Frame::default().with_label("base:"), 48);
         let info_label_running_root = Frame::default().with_label("not running");
