@@ -1,4 +1,6 @@
+use std::path::absolute;
 use lifeblood_manager::InstallationsData;
+
 
 #[test]
 fn test_read_struct1() {
@@ -11,9 +13,7 @@ fn test_read_struct1() {
     };
 
     assert_eq!(
-        PathBuf::from("./tests/data/u_struct1")
-            .canonicalize()
-            .unwrap(),
+        absolute(PathBuf::from("./tests/data/u_struct1")).unwrap(),
         ins.base_path(),
         "base path wrong"
     );

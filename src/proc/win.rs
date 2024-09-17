@@ -4,6 +4,7 @@ use std::{
     path::Path,
     process::{Command, Child, Stdio},
 };
+use dunce::simplified;
 use winconsole::console::generate_ctrl_event;
 
 // const DETACHED_PROCESS: u32 = 0x00000008;
@@ -15,14 +16,7 @@ pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Resu
     // rust likes working with "verbatim" paths,
     // but window's shell and some parts of python do not like such paths
     // so it's safer to just strip that shit
-    let cwd = &{
-        let tmp = cwd.to_str().unwrap();
-        if tmp.starts_with("\\\\?\\") {
-            Path::new(&tmp[4..])
-        } else {
-            cwd
-        }
-    };
+    let cwd = simplified(cwd);
 
     println!("starting {:?}", program);
     Command::new(cwd.join(program))
