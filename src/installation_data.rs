@@ -6,7 +6,7 @@ use std::io::{prelude::*, BufWriter};
 use std::io::{BufReader, Error};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf, absolute};
 use std::process;
 use std::{env, fs};
 
@@ -182,14 +182,14 @@ impl InstallationsData {
         let mut current_path = PathBuf::new();
         let mut base_path_tainted = false;
 
-        let base_path = if let Ok(x) = fs::canonicalize(base_path) {
+        let base_path = if let Ok(x) = absolute(base_path) {
             x
         } else {
             return Err(Error::new(std::io::ErrorKind::InvalidData, "bad base path"));
         };
 
         let maybe_me = if let Ok(p) = env::current_exe() {
-            Some(if let Ok(cp) = p.canonicalize() { cp } else { p })
+            Some(if let Ok(cp) = absolute(&p) { cp } else { p })
         } else {
             None
         };
@@ -1190,15 +1190,7 @@ impl InstallationsData {
         // in case of windows and "verbatim" paths - it seems that some parts of python,
         // like venv, it seem to be getting wrong idea when verbatim path is given as current_dir
         // so we need to clear this
-        #[cfg(windows)]
-        let dest_dir = &{
-            let tmp = dest_dir.to_str().unwrap();
-            if tmp.starts_with("\\\\?\\") {
-                Path::new(&tmp[4..])
-            } else {
-                dest_dir
-            }
-        };
+        let dest_dir = dunce::simplified(dest_dir);
 
         let venv_pybin_path = Self::helper_get_venv_relative_python_bin_path(dest_dir);
 
