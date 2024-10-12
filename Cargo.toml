@@ -17,6 +17,8 @@ name = "lifeblood-manager-cli"
 
 [dependencies]
 fltk = { version = "1.4", features = ["fltk-bundled"], optional=true}
+tray-item = { version = "0.10.0", features = ["ksni"] }
+#tray-icon = "0.19"
 downloader = "0.2.7"
 dunce = "1.0"
 rand = "0.8.5"
