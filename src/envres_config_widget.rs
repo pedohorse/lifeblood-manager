@@ -2,6 +2,7 @@ use crate::config_data::{ConfigData, ConfigError, ConfigWritingError};
 use crate::config_data_collection::ConfigDataCollection;
 use crate::info_dialog::{ChoiceDialog, InfoDialog};
 use crate::theme::ITEM_HEIGHT;
+use crate::tray_manager::TrayManager;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
@@ -112,6 +113,8 @@ impl WidgetCallbacks for StandardEnvResolverConfigWidget {
     ) {
         // do nothing
     }
+
+    fn generate_tray_items(&mut self, tray_manager: &mut TrayManager) {}
 
     fn on_tab_selected(&mut self) {
         if !self.has_unsaved_changes {
