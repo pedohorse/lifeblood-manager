@@ -118,6 +118,7 @@ impl LaunchControlDataOption {
 }
 
 pub struct LaunchControlData {
+    _id: String,
     _process: Option<LaunchedProcess>,
     _command_label: String,
     _description: String,
@@ -131,7 +132,11 @@ pub struct LaunchControlData {
 }
 
 impl LaunchControlData {
+    ///
+    /// launch_id MUST be unique
+    ///
     pub fn new(
+        launch_id: &str,
         installations: Option<&Arc<Mutex<InstallationsData>>>,
         command_label: &str,
         description: &str,
@@ -140,6 +145,7 @@ impl LaunchControlData {
         args_options: Option<Vec<LaunchControlDataOption>>,
     ) -> LaunchControlData {
         LaunchControlData {
+            _id: launch_id.to_owned(),
             _process: None,
             _command_label: command_label.to_owned(),
             _description: description.to_owned(),
@@ -303,6 +309,10 @@ impl LaunchControlData {
 
     pub fn command(&self) -> &str {
         &self._command
+    }
+
+    pub fn launch_id(&self) -> &str {
+        &self._id
     }
 
     pub fn command_label(&self) -> &str {
