@@ -17,8 +17,6 @@ name = "lifeblood-manager-cli"
 
 [dependencies]
 fltk = { version = "1.4", features = ["fltk-bundled"], optional=true}
-tray-item = { version = "0.10.0", features = ["ksni"] }
-#tray-icon = "0.19"
 downloader = "0.2.7"
 dunce = "1.0"
 rand = "0.8.5"
@@ -30,5 +28,12 @@ home = "0.5"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 
+[target.'cfg(not(windows))'.dependencies]
+tray-item = { version = "0.10.0", features = ["ksni"] }
+
 [target.'cfg(windows)'.dependencies]
-winconsole = "0.11"
+winconsole = { version = "0.11", features = [ "window" ] }
+tray-item = { version = "0.10.0"}
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2.5"
