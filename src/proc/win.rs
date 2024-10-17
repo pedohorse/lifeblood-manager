@@ -28,12 +28,12 @@ pub fn create_process(program: &str, args: &Vec<String>, cwd: &Path) -> io::Resu
 }
 
 pub fn terminate_child(child: &Child) -> io::Result<()> {
-    // generate_ctrl_event(true <- means send Ctrl+Break. with "false" it's supposed to be ctrl+c, but it just doesn't work at all
+    // generate_ctrl_event(true <- means send Ctrl+Break. with "false" it's supposed to be ctrl+c, but it works very differently, see microsoft manual
     match generate_ctrl_event(true, child.id()) {
         Ok(_) => return Ok(()),
         Err(e) => {
             eprintln!("error terminating process: {:?}", e);
-            return Err(io::Error::new(io::ErrorKind::Other, "terminate failed"));
+            return Err(io::Error::new(io::ErrorKind::Other, format!("terminate failed: {}", e)));
         }
     }
 }
