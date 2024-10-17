@@ -1,18 +1,18 @@
 use crate::config_data_collection::ConfigDataCollection;
-use crate::theme::*;
-use crate::widgets::{Widget, WidgetCallbacks};
-use crate::InstallationsData;
 use crate::info_dialog::InfoDialog;
 use crate::installation_helpers::get_python_command;
+use crate::theme::*;
+use crate::tray_manager::TrayManager;
+use crate::widgets::{Widget, WidgetCallbacks};
 use crate::wizard::Wizard;
+use crate::InstallationsData;
 use fltk::button::CheckButton;
 use fltk::dialog;
 use fltk::misc::InputChoice;
 use fltk::{
     app,
     button::Button,
-    draw,
-    enums,
+    draw, enums,
     frame::Frame,
     group::Flex,
     prelude::*,
@@ -50,21 +50,30 @@ pub struct InstallationWidget {
 }
 
 fn lock_install_data(data: &Arc<Mutex<InstallationsData>>) -> MutexGuard<'_, InstallationsData> {
-    if let Ok(x) = data.lock() { x } else{
+    if let Ok(x) = data.lock() {
+        x
+    } else {
         panic!("failed to lock installations data!");
     }
 }
 
 impl InstallationWidget {
-    pub fn change_install_dir(&mut self, _new_path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>) -> Result<(), std::io::Error> {
+    pub fn change_install_dir(
+        &mut self,
+        _new_path: &PathBuf,
+        install_data: Option<&Arc<Mutex<InstallationsData>>>,
+    ) -> Result<(), std::io::Error> {
         let new_data = match install_data {
             Some(x) => x.clone(),
             None => {
                 self.installation_table.set_rows(0);
-                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "path has no lifeblood installations"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "path has no lifeblood installations",
+                ));
             }
         };
-        
+
         let guard = lock_install_data(&new_data);
 
         if guard.is_base_path_tainted() {
@@ -96,19 +105,21 @@ impl InstallationWidget {
             self.installation_table.redraw();
         }
     }
-
 }
 
 impl WidgetCallbacks for InstallationWidget {
-    fn install_location_changed(&mut self, path: &PathBuf, install_data: Option<&Arc<Mutex<InstallationsData>>>){
-        self.change_install_dir(path, install_data).unwrap_or_else(|_| {
-            println!("failed to set path to {:?}", path);
-        })
+    fn install_location_changed(
+        &mut self,
+        path: &PathBuf,
+        install_data: Option<&Arc<Mutex<InstallationsData>>>,
+    ) {
+        self.change_install_dir(path, install_data)
+            .unwrap_or_else(|_| {
+                println!("failed to set path to {:?}", path);
+            })
     }
 
-    fn on_tab_selected(&mut self) {
-        
-    }
+    fn on_tab_selected(&mut self) {}
 }
 
 impl Widget for InstallationWidget {
@@ -139,11 +150,12 @@ impl Widget for InstallationWidget {
 
         // buttons
         let mut control_buttons_group_vertical = Flex::default().column();
-        flex.fixed(&control_buttons_group_vertical, 2*ITEM_HEIGHT);
+        flex.fixed(&control_buttons_group_vertical, 2 * ITEM_HEIGHT);
 
         let upper_control_row = Flex::default().row();
         control_buttons_group_vertical.fixed(&upper_control_row, ITEM_HEIGHT);
-        let ignore_system_python_checkbox = CheckButton::default().with_label("ignore system python");
+        let ignore_system_python_checkbox =
+            CheckButton::default().with_label("ignore system python");
         let mut wizard_button = Button::default().with_label("Config Wizard");
         upper_control_row.end();
 
@@ -201,8 +213,7 @@ impl Widget for InstallationWidget {
                             } else {
                                 match &widget_to_cb.try_lock() {
                                     Ok(guard) => match guard.install_data {
-                                        Some(ref mutexed_data) =>
-                                        {
+                                        Some(ref mutexed_data) => {
                                             // TODO: OMG, we are doing 2 locks for EACH CELL !!
                                             let data = lock_install_data(&mutexed_data);
                                             if data.current_version_index() == ver_id {
@@ -210,7 +221,6 @@ impl Widget for InstallationWidget {
                                             } else {
                                                 CELL_BG_COLOR
                                             }
-                                            
                                         }
                                         _ => CELL_BG_COLOR,
                                     },
@@ -345,13 +355,18 @@ impl Widget for InstallationWidget {
             } else {
                 return;
             };
-            
+
             if let Err(e) = install_data.rename_version(ver_id, new_name) {
                 eprintln!("failed to rename! {}", e);
-                InfoDialog::show(popup_x, popup_y, "error", &format!("failed to rename! {}", e));
+                InfoDialog::show(
+                    popup_x,
+                    popup_y,
+                    "error",
+                    &format!("failed to rename! {}", e),
+                );
             }
             drop(install_data);
-            
+
             guard.installation_table.redraw();
         });
 
@@ -404,9 +419,13 @@ impl Widget for InstallationWidget {
                             if let Some(ref path) = path_to_python {
                                 println!("using python: {:?}", path);
                             }
-                            
+
                             // download latest
-                            let new_ver = match data.download_new_version(&branch, true, path_to_python.as_deref()) {
+                            let new_ver = match data.download_new_version(
+                                &branch,
+                                true,
+                                path_to_python.as_deref(),
+                            ) {
                                 Ok(idx) => {
                                     // TODO: result process somehow
                                     idx
