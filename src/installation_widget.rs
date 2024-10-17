@@ -119,6 +119,8 @@ impl WidgetCallbacks for InstallationWidget {
             })
     }
 
+    fn generate_tray_items(&mut self, tray_manager: &mut TrayManager) {}
+
     fn on_tab_selected(&mut self) {}
 }
 
