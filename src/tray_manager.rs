@@ -102,7 +102,6 @@ impl TrayManager {
     pub fn process_tray_messages(&mut self) -> bool {
         match self.tray_command_receiver.try_recv() {
             Ok(message) => {
-                println!("i have received {:?}", message);
                 match message {
                     TrayMessage::WidgetMessage((message_type_id, tray_item_id)) => {
                         if let Some(callback) = self.tray_callbacks.get_mut(&message_type_id) {
