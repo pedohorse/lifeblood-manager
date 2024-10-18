@@ -2,6 +2,7 @@ use crate::launch_data::{
     LaunchControlData, LaunchControlDataOption, LaunchControlDataOptionValueStorage,
 };
 use crate::theme::ITEM_HEIGHT;
+use crate::tray_manager::{TrayItemHandle, TrayManager};
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
@@ -10,12 +11,19 @@ use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::{app, frame::Frame, group::Flex, prelude::*};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Component, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use winconsole::window;
+#[cfg(windows)]
+use crate::win_console_hack::is_console;
 
 pub struct LaunchWidget {
     launch_datas: Vec<Rc<RefCell<LaunchControlData>>>,
+    launches: HashMap<String, (Box<dyn FnMut() -> ()>, Box<dyn FnMut() -> ()>, Box<dyn Fn() -> bool>)>,
+    tray_item_handlers: Rc<RefCell<HashMap<String, TrayItemHandle>>>,
 }
 
 impl WidgetCallbacks for LaunchWidget {
@@ -31,6 +39,32 @@ impl WidgetCallbacks for LaunchWidget {
         }
     }
 
+    fn generate_tray_items(&mut self, tray_manager: &mut TrayManager) {
+        for launch_data in self.launch_datas.iter() {
+            let launch_id = launch_data.borrow().launch_id().to_owned();
+            let (_starter, _stopper, is_running) = if let Some(x) = self.launches.get(&launch_id) {
+                x
+            } else {
+                eprintln!("no widget for launch '{}'", &launch_id);
+                continue;
+            };
+
+            let status = if is_running() { "running" } else { "stopped" };
+            match tray_manager.add_tray_item(&format!("{}: {}", &launch_id, status), |_| {
+                // TODO: implement clicking the tray itme
+            }) {
+                Ok(handle) => {
+                    self.tray_item_handlers
+                        .borrow_mut()
+                        .insert(launch_id, handle);
+                }
+                Err(_) => {
+                    eprintln!("failed to generate tray item for {}", &launch_id);
+                }
+            };
+        }
+    }
+
     fn on_tab_selected(&mut self) {}
 }
 
@@ -43,6 +77,7 @@ impl Widget for LaunchWidget {
 
         // different launch options
         let scheduler_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
+            "scheduler",
             None,
             "Scheduler",
             "This should be run on ONLY ONE COMPUTER in your network. \
@@ -83,6 +118,7 @@ impl Widget for LaunchWidget {
             ]),
         )));
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
+            "worker pool",
             None,
             "Worker Pool",
             "Run this on EVERY computer that needs to do the work",
@@ -114,6 +150,7 @@ impl Widget for LaunchWidget {
             ]),
         )));
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
+            "viewer",
             None,
             "Viewer",
             "Viewer is a UI to access scheduler over network. You can use it to set up task workflows and monitor task progression",
@@ -140,10 +177,29 @@ impl Widget for LaunchWidget {
                 wpool_launch_data.clone(),
                 viewer_launch_data.clone(),
             ],
+            launches: HashMap::new(),
+            tray_item_handlers: Rc::new(RefCell::new(HashMap::new())),
         };
         widget.make_launch_buttons(&mut flex, scheduler_launch_data);
         widget.make_launch_buttons(&mut flex, wpool_launch_data);
         widget.make_launch_buttons(&mut flex, viewer_launch_data);
+
+        // for windows - generate buttons to show/hide root console with logs
+        #[cfg(windows)]
+        if !is_console() {
+            let horizontal_flex = Flex::default_fill().row();
+            let mut show_btn = Button::default().with_label("show root console");
+            let mut hide_btn = Button::default().with_label("hide root console");
+            show_btn.set_callback(|_| {
+                window::activate(true);
+            });
+            hide_btn.set_callback(|_| {
+                window::hide();
+            });
+            horizontal_flex.end();
+            flex.fixed(&horizontal_flex, ITEM_HEIGHT);
+        }
+
 
         flex.end();
         tab_header.end();
@@ -284,135 +340,193 @@ impl LaunchWidget {
         }
 
         // ui callbacks
-        let control_data_ref = Rc::downgrade(&control_data);
-        let mut start_button_cl = start_button.clone();
-        let mut stop_button_cl = stop_button.clone();
-        let mut status_label_cl = status_label.clone();
-        let mut pid_label_cl = pid_label.clone();
-        let mut options_widgets_cl = options_widgets_rc.clone();
-        let mut info_label_running_root_cl = info_label_running_root.clone();
-        app::add_timeout3(1.0, move |handle| {
-            let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
-                x
-            } else {
-                println!("[WARNING] callback ui called after data is dropped, ignoring");
-                return;
-            };
-            let mut data = control_data_ref.borrow_mut();
-            if !data.is_process_running() {
-                app::repeat_timeout3(2.0, handle);
-                return;
-            };
-
-            match data.try_wait() {
-                Ok(Some(status)) => {
-                    let exit_code = status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
-
-                    let status_text = match exit_code {
-                        0 => "⚪ finished OK",
-                        -1 => "🔴 unhandled signal",
-                        1 => "🔴 generic error",
-                        2 => "🔴 argument error",
-                        x => &format!("🔴 error code: {}", x),
-                    };
-                    status_label_cl.set_label(status_text);
-                    status_label_cl.set_tooltip(status_text);
-                    start_button_cl.activate();
-                    stop_button_cl.deactivate();
-                    Self::change_active_status_on_vec(&mut options_widgets_cl, true);
-                    info_label_running_root_cl.set_label("");
-                    pid_label_cl.set_label("not running");
-                }
-                Err(e) => {
-                    eprintln!("failed to check process status: {:?}, ignoring", e);
-                }
-                Ok(None) => {} // we just wait
-            };
-
-            app::repeat_timeout3(1.0, handle);
-        });
-
-        let control_data_ref = Rc::downgrade(&control_data);
-        let mut start_button_cl = start_button.clone();
-        let mut stop_button_cl = stop_button.clone();
-        let mut status_label_cl = status_label.clone();
-        let mut pid_label_cl = pid_label.clone();
-        let mut options_widgets_cl = options_widgets_rc.clone();
-        let mut info_label_running_root_cl = info_label_running_root.clone();
-        start_button.set_callback(move |_| {
-            let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
-                x
-            } else {
-                println!("[WARNING] callback ui called after data is dropped, ignoring");
-                return;
-            };
-            let mut data = control_data_ref.borrow_mut();
-            if let Some(_) = data.process() {
-                eprintln!("start button: process already started!");
-                return;
-            }
-
-            match data.start_process() {
-                Ok(()) => {
-                    info_label_running_root_cl.set_label(
-                        &data
-                            .current_installation()
-                            .expect("unexpected: installation data disappeared!")
-                            .base_path()
-                            .components()
-                            .rev()
-                            .take(2)
-                            .collect::<Vec<Component>>()
-                            .into_iter()
-                            .rev()
-                            .collect::<PathBuf>()
-                            .to_string_lossy(),
-                    );
-                }
-                Err(e) => {
-                    eprintln!("failed to start process! {:?}", e);
-                    let err = format!("🔴 failed to start {}: {}", data.command(), e.kind());
-                    status_label_cl.set_label(&err);
-                    status_label_cl.set_tooltip(&err);
-                    return;
-                }
-            };
-
-            start_button_cl.deactivate();
-            Self::change_active_status_on_vec(&mut options_widgets_cl, false);
-            stop_button_cl.activate();
-            status_label_cl.set_label("🟢 running");
-            status_label_cl.set_tooltip("running");
-            pid_label_cl.set_label(&format!(
-                "pid: {}",
-                if let Some(pid) = data.process_pid() {
-                    pid
+        app::add_timeout3(1.0, {
+            let control_data_ref = Rc::downgrade(&control_data);
+            let mut start_button_cl = start_button.clone();
+            let mut stop_button_cl = stop_button.clone();
+            let mut status_label_cl = status_label.clone();
+            let mut pid_label_cl = pid_label.clone();
+            let mut options_widgets_cl = options_widgets_rc.clone();
+            let mut info_label_running_root_cl = info_label_running_root.clone();
+            let tray_item_handlers = self.tray_item_handlers.clone();
+            move |handle| {
+                let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
+                    x
                 } else {
-                    0
-                }
-            ));
+                    println!("[WARNING] callback ui called after data is dropped, ignoring");
+                    return;
+                };
+                let mut data = control_data_ref.borrow_mut();
+                if !data.is_process_running() {
+                    app::repeat_timeout3(2.0, handle);
+                    return;
+                };
+
+                match data.try_wait() {
+                    Ok(Some(status)) => {
+                        let exit_code = status.code().unwrap_or(-1); // read code() help to see why we rewrap this option
+
+                        let status_text = match exit_code {
+                            0 => "⚪ finished OK",
+                            -1 => "🔴 unhandled signal",
+                            1 => "🔴 generic error",
+                            2 => "🔴 argument error",
+                            x => &format!("🔴 error code: {}", x),
+                        };
+                        if let Some(x) = tray_item_handlers.borrow_mut().get_mut(data.launch_id()) {
+                            if let Err(_) = x.change_label(&format!("{}: stopped", data.launch_id())) {
+                                eprintln!("failed to change tray menu item label for {}", data.launch_id());
+                            }
+                        }
+                        status_label_cl.set_label(status_text);
+                        status_label_cl.set_tooltip(status_text);
+                        start_button_cl.activate();
+                        stop_button_cl.deactivate();
+                        Self::change_active_status_on_vec(&mut options_widgets_cl, true);
+                        info_label_running_root_cl.set_label("");
+                        pid_label_cl.set_label("not running");
+                    }
+                    Err(e) => {
+                        eprintln!("failed to check process status: {:?}, ignoring", e);
+                    }
+                    Ok(None) => {} // we just wait
+                };
+                app::repeat_timeout3(1.0, handle);
+            }
         });
 
-        let control_data_ref = Rc::downgrade(&control_data);
-        let mut status_label_cl = status_label.clone();
-        let mut stop_button_cl = stop_button.clone();
-        stop_button.set_callback(move |_| {
-            let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
-                x
-            } else {
-                println!("[WARNING] callback ui called after data is dropped, ignoring");
-                return;
-            };
-            let data = control_data_ref.borrow_mut();
-            if let Some(ref proc) = data.process() {
-                if let Err(e) = proc.send_terminate_signal() {
-                    eprintln!("failed to call terminate on child process cuz of: {:?}", e);
+        let mut callback_start = {
+            let control_data_ref = Rc::downgrade(&control_data);
+            let mut start_button_cl = start_button.clone();
+            let mut stop_button_cl = stop_button.clone();
+            let mut status_label_cl = status_label.clone();
+            let mut pid_label_cl = pid_label.clone();
+            let mut options_widgets_cl = options_widgets_rc.clone();
+            let mut info_label_running_root_cl = info_label_running_root.clone();
+            let tray_item_handlers = self.tray_item_handlers.clone();
+            move || {
+                let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
+                    x
+                } else {
+                    println!("[WARNING] callback ui called after data is dropped, ignoring");
+                    return;
+                };
+                let mut data = control_data_ref.borrow_mut();
+                if let Some(_) = data.process() {
+                    eprintln!("start button: process already started!");
                     return;
                 }
-                status_label_cl.set_label("🟠 terminating");
-                status_label_cl.set_tooltip("terminating...");
-                stop_button_cl.deactivate();
-            };
+
+                match data.start_process() {
+                    Ok(()) => {
+                        info_label_running_root_cl.set_label(
+                            &data
+                                .current_installation()
+                                .expect("unexpected: installation data disappeared!")
+                                .base_path()
+                                .components()
+                                .rev()
+                                .take(2)
+                                .collect::<Vec<Component>>()
+                                .into_iter()
+                                .rev()
+                                .collect::<PathBuf>()
+                                .to_string_lossy(),
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("failed to start process! {:?}", e);
+                        let err = format!("🔴 failed to start {}: {}", data.command(), e.kind());
+                        status_label_cl.set_label(&err);
+                        status_label_cl.set_tooltip(&err);
+                        return;
+                    }
+                };
+
+                if let Some(x) = tray_item_handlers.borrow_mut().get_mut(data.launch_id()) {
+                    if let Err(_) = x.change_label(&format!("{}: running", data.launch_id())) {
+                        eprintln!("failed to change tray menu item label for {}", data.launch_id());
+                    }
+                }
+                start_button_cl.deactivate();
+                Self::change_active_status_on_vec(&mut options_widgets_cl, false);
+                stop_button_cl.activate();
+                status_label_cl.set_label("🟢 running");
+                status_label_cl.set_tooltip("running");
+                pid_label_cl.set_label(&format!(
+                    "pid: {}",
+                    if let Some(pid) = data.process_pid() {
+                        pid
+                    } else {
+                        0
+                    }
+                ));
+            }
+        };
+
+        let mut callback_stop = {
+            let control_data_ref = Rc::downgrade(&control_data);
+            let mut status_label_cl = status_label.clone();
+            let mut stop_button_cl = stop_button.clone();
+            let tray_item_handlers = self.tray_item_handlers.clone();
+            move || {
+                let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
+                    x
+                } else {
+                    println!("[WARNING] callback ui called after data is dropped, ignoring");
+                    return;
+                };
+                let data = control_data_ref.borrow_mut();
+                if !data.is_process_running() {
+                    return;
+                };
+                if let Some(ref proc) = data.process() {
+                    if let Err(e) = proc.send_terminate_signal() {
+                        eprintln!("failed to call terminate on child process cuz of: {:?}", e);
+                        status_label_cl.set_tooltip(&format!("failed to call terminate on child process cuz of: {:?}", e));
+                        return;
+                    }
+                    if let Some(x) = tray_item_handlers.borrow_mut().get_mut(data.launch_id()) {
+                        if let Err(_) = x.change_label(&format!("{}: terminating...", data.launch_id())) {
+                            eprintln!("failed to change tray menu item label for {}", data.launch_id());
+                        }
+                    }
+                    status_label_cl.set_label("🟠 terminating");
+                    status_label_cl.set_tooltip("terminating...");
+                    stop_button_cl.deactivate();
+                };
+            }
+        };
+
+        let callback_status = {
+            let control_data_ref = Rc::downgrade(&control_data);
+            move || {
+                let control_data_ref = if let Some(x) = control_data_ref.upgrade() {
+                    x
+                } else {
+                    println!("[WARNING] callback ui called after data is dropped, ignoring");
+                    return false;
+                };
+                let data = control_data_ref.borrow_mut();
+                data.is_process_running()
+            }
+        };
+
+        self.launches.insert(
+            control_data.borrow().launch_id().to_owned(),
+            (
+                Box::new(callback_start.clone()),
+                Box::new(callback_stop.clone()),
+                Box::new(callback_status),
+            ),
+        );
+        start_button.set_callback(move |_| {
+            callback_start();
+        });
+        stop_button.set_callback({
+            move |_| {
+                callback_stop();
+            }
         });
 
         control_data
@@ -441,6 +555,22 @@ impl LaunchWidget {
                     }
                 },
             )));
+    }
+
+    pub fn start_process_by_id(&mut self, id: &'static str) -> Result<(), ()> {
+        if let Some((ref mut starter, _, _)) = self.launches.get_mut(id) {
+            Ok(starter())
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn stop_process_by_id(&mut self, id: &'static str) -> Result<(), ()> {
+        if let Some((_, ref mut stopper, _)) = self.launches.get_mut(id) {
+            Ok(stopper())
+        } else {
+            Err(())
+        }
     }
 
     fn change_active_status_on_vec(
