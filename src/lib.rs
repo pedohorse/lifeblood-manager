@@ -5,12 +5,16 @@ mod running_process_data;
 mod launch_data;
 mod proc;
 mod wizard;
+pub mod tray_manager;
 pub mod config_data;
 pub mod installation_helpers;
 pub mod config_data_collection;
 pub use installation_data::{InstallationsData, InstalledVersion};
 pub use launch_data::LaunchControlData;
 pub use running_process_data::LaunchedProcess;
+
+#[cfg(windows)]
+pub mod win_console_hack;
 
 #[cfg(feature = "ui")]
 mod widgets;
