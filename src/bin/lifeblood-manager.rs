@@ -1,4 +1,4 @@
-use fltk::button::{CheckButton, ToggleButton};
+use fltk::button::CheckButton;
 use fltk::enums::CallbackTrigger;
 use fltk::window::DoubleWindow;
 use fltk::{
@@ -6,27 +6,28 @@ use fltk::{
     input::FileInput, prelude::*, window::Window,
 };
 use lifeblood_manager::{
-    theme::*, InstallationWidget, InstallationsData, LaunchWidget, StandardEnvResolverConfigWidget,
-    Widget, WidgetCallbacks, BUILD_INFO,
+    theme::*,
+    tray_manager::TrayManager,
+    InstallationWidget, InstallationsData, LaunchWidget, StandardEnvResolverConfigWidget, Widget,
+    WidgetCallbacks, BUILD_INFO,
 };
+use std::cell::RefCell;
 use std::env::current_dir;
 use std::path::PathBuf;
-use std::sync::mpsc::TryRecvError;
-use std::sync::{mpsc, Arc, Mutex};
-use tray_item::{IconSource, TrayItem};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use winconsole::window;
+#[cfg(windows)]
+use lifeblood_manager::win_console_hack::{is_console, free_console};
 
 pub struct MainWidget {
     base_path_input: FileInput,
     sub_widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>>,
     install_data: Option<Arc<Mutex<InstallationsData>>>,
-    tray_item: Option<TrayItem>,
-    tray_command_sender: mpsc::Sender<TrayMessage>,
-}
-
-#[derive(Debug)]
-enum TrayMessage {
-    Quit,
-    Show,
+    tray_manager: Option<Rc<RefCell<TrayManager>>>,
+    main_window: DoubleWindow,
+    hide_instead_of_closing: Rc<RefCell<bool>>,
 }
 
 impl MainWidget {
@@ -59,10 +60,8 @@ impl MainWidget {
         let (mut browse_button, base_input) = Self::init_base_path_input(&mut flex);
 
         let mut tray_checkbox = CheckButton::default().with_label("stay in tray");
-        tray_checkbox.set(do_tray);
+        flex.fixed(&tray_checkbox, ITEM_HEIGHT);
 
-        let path_warning_label = Frame::default().with_label("");
-        flex.fixed(&path_warning_label, ITEM_HEIGHT);
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
 
@@ -85,41 +84,15 @@ impl MainWidget {
 
         flex.end();
 
-        let (tx, rx) = mpsc::channel();
         // widget data
         let widget = Arc::new(Mutex::new(MainWidget {
             base_path_input: base_input,
             sub_widgets: widgets,
             install_data: None,
-            tray_item: None,
-            tray_command_sender: tx,
+            tray_manager: None,
+            main_window: wind.clone(),
+            hide_instead_of_closing: Rc::new(RefCell::new(do_tray)),
         }));
-        
-        app::add_timeout3(0.5, {
-            let mut wind = wind.clone();
-            let widget = widget.clone();
-            move |handle| {
-                match rx.try_recv() {
-                    Ok(message) => {
-                        println!("i have received {:?}", message);
-                        match message {
-                            TrayMessage::Show => {
-                                wind.show();
-                            },
-                            TrayMessage::Quit => {
-                                widget.lock().unwrap().remove_tray_item();
-                                wind.hide();
-                            }
-                        }
-                        app::repeat_timeout3(0.5, handle);
-                    }
-                    Err(TryRecvError::Empty) => {
-                        app::repeat_timeout3(0.5, handle);
-                    }
-                    Err(TryRecvError::Disconnected) => (), // close control channel
-                };
-            }
-        });
 
         // callbacks
 
@@ -128,8 +101,10 @@ impl MainWidget {
             move |chb| {
                 if chb.is_checked() {
                     widget.lock().unwrap().add_tray_item();
+                    chb.deactivate(); // removing tray item is not currently supported
                 } else {
-                    widget.lock().unwrap().remove_tray_item();
+                    // removing tray item is not currently supported
+                    //widget.lock().unwrap().remove_tray_item();
                 }
             }
         });
@@ -186,8 +161,12 @@ impl MainWidget {
         widget
     }
 
+    pub fn hide_insted_of_closing(&self) -> bool {
+        *self.hide_instead_of_closing.borrow()
+    }
+
     pub fn has_tray_item(&self) -> bool {
-        if let Some(_) = self.tray_item {
+        if let Some(_) = self.tray_manager {
             true
         } else {
             false
@@ -195,12 +174,7 @@ impl MainWidget {
     }
 
     pub fn remove_tray_item(&mut self) {
-        if !self.has_tray_item() {
-            return;
-        }
-        if let Some(tray) = self.tray_item.take() {
-            drop(tray);
-        }
+        panic!("remove tray icon is not currently supported");
     }
 
     pub fn add_tray_item(&mut self) {
@@ -208,39 +182,54 @@ impl MainWidget {
             return;
         }
         // initialize tray item
-        let icon = IconSource::Resource("()");
-        let mut tray_maybe = if let Ok(x) = TrayItem::new("foofoo", icon) {
-            Some(x)
-        } else {
-            None
+        let mut tray_manager = match TrayManager::new("lifeblood-manager") {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("failed to create tray icon: {}", e);
+                return;
+            }
         };
 
-        if let Some(ref mut tray) = tray_maybe {
-            tray.add_menu_item("Show", {
-                let tx = self.tray_command_sender.clone();
-                move || {
-                    tx.send(TrayMessage::Show).unwrap_or_else(|_| {
-                        println!("failed to communicate from tray item");
-                    });
-                }
-            })
-            .unwrap();
-            tray.add_menu_item("Quit", {
-                let tx = self.tray_command_sender.clone();
-                move || {
-                    tx.send(TrayMessage::Quit).unwrap_or_else(|_| {
-                        println!("failed to communicate from tray item");
-                    });
-                }
-            })
-            .unwrap();
+        if let Err(_) = tray_manager.add_tray_item("Show", {
+            let mut wind = self.main_window.clone();
+            move |_| {
+                wind.show();
+            }
+        }) {
+            eprintln!("failed to add tray item");
+            return;
+        };
 
-            
-        } else {
-            eprintln!("failed to initialize tray item");
+        for widget in self.sub_widgets.iter() {
+            widget
+                .lock()
+                .as_mut()
+                .unwrap()
+                .generate_tray_items(&mut tray_manager);
         }
 
-        self.tray_item = tray_maybe;
+        if let Err(_) = tray_manager.add_tray_item("Quit", {
+            let hide_instead_of_closing = self.hide_instead_of_closing.clone();
+            move |_| {
+                *hide_instead_of_closing.borrow_mut() = false;
+                app::quit();
+            }
+        }) {
+            eprintln!("failed to add tray item");
+            return;
+        };
+
+        self.tray_manager = Some(Rc::new(RefCell::new(tray_manager)));
+        app::add_timeout3(0.5, {
+            let tray_manager = self.tray_manager.as_ref().unwrap().clone();
+            move |handle| {
+                if !tray_manager.borrow_mut().process_tray_messages() {
+                    return;
+                }
+                app::repeat_timeout3(0.5, handle);
+            }
+        });
+        *self.hide_instead_of_closing.borrow_mut() = true;
     }
 
     pub fn change_install_dir(&mut self, new_path: &PathBuf) {
@@ -269,7 +258,12 @@ fn main() {
         panic!("failed to get current dir!");
     };
 
-    let app = app::App::default().with_scheme(app::Scheme::Gtk);
+    #[cfg(windows)]
+    if !is_console() {
+        window::hide();
+    }
+
+    app::App::default().with_scheme(app::Scheme::Gtk);
     app::set_background_color(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2]);
     app::set_foreground_color(FG_COLOR[0], FG_COLOR[1], FG_COLOR[2]);
     app::set_background2_color(BG2_COLOR[0], BG2_COLOR[1], BG2_COLOR[2]);
@@ -293,25 +287,12 @@ fn main() {
 
     loop {
         // "event" loop
-        app::wait_for(0.0).expect("event loop broke");
-        if !wind.shown() && !main_widget.lock().unwrap().has_tray_item() {
+        //app.run().expect("failed to run fltk main loop");
+        app::wait_for(0.01).expect("event loop broke");
+        if !wind.shown() && !main_widget.lock().unwrap().hide_insted_of_closing() {
             break;
         }
     }
-    //app.run().unwrap();
-    app::delete_widget(wind); // deleting widgets delets lambdas holding arcs to self
 
-    // // Theming
-    // wind.set_color(Color::White);
-    // but_inc.set_color(Color::from_u32(0x304FFE));
-    // but_inc.set_selection_color(Color::Green);
-    // but_inc.set_label_size(20);
-    // but_inc.set_frame(FrameType::FlatBox);
-    // but_inc.set_label_color(Color::White);
-    // but_dec.set_color(Color::from_u32(0x2962FF));
-    // but_dec.set_selection_color(Color::Red);
-    // but_dec.set_frame(FrameType::FlatBox);
-    // but_dec.set_label_size(20);
-    // but_dec.set_label_color(Color::White);
-    // // End theming
+    app::delete_widget(wind); // deleting widgets delets lambdas holding arcs to self
 }
