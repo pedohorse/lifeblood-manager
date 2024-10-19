@@ -5,14 +5,15 @@ use crate::theme::ITEM_HEIGHT;
 use crate::tray_manager::{TrayItemHandle, TrayManager};
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
-use fltk::button::Button;
+use crate::MainWidgetConfig;
+use fltk::button::{Button, CheckButton};
 use fltk::enums::{Align, CallbackTrigger};
 use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::{app, frame::Frame, group::Flex, prelude::*};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::{Component, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 #[cfg(windows)]
@@ -21,15 +22,29 @@ use winconsole::window;
 use crate::win_console_hack::is_console;
 
 pub struct LaunchWidget {
+    config: Rc<RefCell<MainWidgetConfig>>,
     launch_datas: Vec<Rc<RefCell<LaunchControlData>>>,
     launches: HashMap<String, (Box<dyn FnMut() -> ()>, Box<dyn FnMut() -> ()>, Box<dyn Fn() -> bool>)>,
     tray_item_handlers: Rc<RefCell<HashMap<String, TrayItemHandle>>>,
 }
 
 impl WidgetCallbacks for LaunchWidget {
+    fn post_initialize(&mut self) {
+        // do autostart if needed
+        {
+            let config = self.config.clone();
+            for launch_id in config.borrow().launch_ids_to_autostart() {
+                if let Err(_e) = self.start_process_by_id(launch_id) {
+                    eprintln!("failed to autostart '{}'", launch_id);
+                };
+            }
+        }
+
+    }
+
     fn install_location_changed(
         &mut self,
-        _path: &PathBuf,
+        _path: &Path,
         install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) {
         for launch_data in self.launch_datas.iter_mut() {
@@ -69,7 +84,7 @@ impl WidgetCallbacks for LaunchWidget {
 }
 
 impl Widget for LaunchWidget {
-    fn initialize() -> (Arc<Mutex<Self>>, Flex) {
+    fn initialize(config: Rc<RefCell<MainWidgetConfig>>) -> (Arc<Mutex<Self>>, Flex) {
         let tab_header = Flex::default_fill().with_label("Launch\t").row();
         let mut flex = Flex::default_fill().column();
         flex.set_margin(8);
@@ -116,6 +131,7 @@ impl Widget for LaunchWidget {
                     Some("--broadcast-interval"),
                 ),
             ]),
+            true,
         )));
         let wpool_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             "worker pool",
@@ -148,6 +164,7 @@ impl Widget for LaunchWidget {
                     Some("simple"),
                 ),
             ]),
+            true,
         )));
         let viewer_launch_data = Rc::new(RefCell::new(LaunchControlData::new(
             "viewer",
@@ -168,10 +185,12 @@ impl Widget for LaunchWidget {
                 ]),
                 Some("--loglevel"),
             )]),
+            false,
         )));
 
         // main launch widget
         let mut widget = LaunchWidget {
+            config: config.clone(),
             launch_datas: vec![
                 scheduler_launch_data.clone(),
                 wpool_launch_data.clone(),
@@ -315,6 +334,27 @@ impl LaunchWidget {
         button_group.end();
         button_box.fixed(&button_group, ITEM_HEIGHT);
         button_box.end();
+        if control_data.borrow().allow_autostart() {
+            let control_data = control_data.borrow();
+            let mut autostart_checkbox = CheckButton::default().with_label("start automatically");
+            autostart_checkbox.set_checked(self.config.borrow().has_autostart_launch_id(&control_data.launch_id()));
+
+            autostart_checkbox.set_callback({
+                let config = self.config.clone();
+                let launch_id = control_data.launch_id().to_string();
+                move |wgt| {
+                    let mut config = config.borrow_mut();
+                    if wgt.is_checked() {
+                        config.add_autostart_launch_id(&launch_id);
+                    } else {
+                        config.remove_autostart_launch_id(&launch_id);
+                    }
+                    if let Err(e) = config.write_to_file() {
+                        eprintln!("failed to save config file: {}", e);
+                    }
+                }
+            });
+        }
 
         let info_box = Flex::default_fill().column();
         let pid_label = Frame::default().with_label("not running");
@@ -557,7 +597,7 @@ impl LaunchWidget {
             )));
     }
 
-    pub fn start_process_by_id(&mut self, id: &'static str) -> Result<(), ()> {
+    pub fn start_process_by_id(&mut self, id: &str) -> Result<(), ()> {
         if let Some((ref mut starter, _, _)) = self.launches.get_mut(id) {
             Ok(starter())
         } else {
@@ -565,7 +605,7 @@ impl LaunchWidget {
         }
     }
 
-    pub fn stop_process_by_id(&mut self, id: &'static str) -> Result<(), ()> {
+    pub fn stop_process_by_id(&mut self, id: &str) -> Result<(), ()> {
         if let Some((_, ref mut stopper, _)) = self.launches.get_mut(id) {
             Ok(stopper())
         } else {
