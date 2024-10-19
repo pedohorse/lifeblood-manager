@@ -1,6 +1,7 @@
 use crate::config_data_collection::ConfigDataCollection;
 use crate::info_dialog::InfoDialog;
 use crate::installation_helpers::get_python_command;
+use crate::main_widget_config::MainWidgetConfig;
 use crate::theme::*;
 use crate::tray_manager::TrayManager;
 use crate::widgets::{Widget, WidgetCallbacks};
@@ -18,9 +19,11 @@ use fltk::{
     prelude::*,
     table::{Table, TableContext},
 };
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::MutexGuard;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Mutex, TryLockError},
 };
 use std::{sync::Arc, thread, time::Duration};
@@ -60,7 +63,7 @@ fn lock_install_data(data: &Arc<Mutex<InstallationsData>>) -> MutexGuard<'_, Ins
 impl InstallationWidget {
     pub fn change_install_dir(
         &mut self,
-        _new_path: &PathBuf,
+        _new_path: &Path,
         install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) -> Result<(), std::io::Error> {
         let new_data = match install_data {
@@ -110,7 +113,7 @@ impl InstallationWidget {
 impl WidgetCallbacks for InstallationWidget {
     fn install_location_changed(
         &mut self,
-        path: &PathBuf,
+        path: &Path,
         install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) {
         self.change_install_dir(path, install_data)
@@ -122,10 +125,12 @@ impl WidgetCallbacks for InstallationWidget {
     fn generate_tray_items(&mut self, tray_manager: &mut TrayManager) {}
 
     fn on_tab_selected(&mut self) {}
+
+    fn post_initialize(&mut self) {}
 }
 
 impl Widget for InstallationWidget {
-    fn initialize() -> (Arc<Mutex<Self>>, Flex) {
+    fn initialize(_config: Rc<RefCell<MainWidgetConfig>>) -> (Arc<Mutex<Self>>, Flex) {
         let tab_header = Flex::default_fill().with_label("Installation\t").row();
         let mut flex = Flex::default_fill().column();
         flex.set_margin(8);
