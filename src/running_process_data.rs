@@ -46,8 +46,9 @@ impl LaunchedProcess {
 
 impl Drop for LaunchedProcess {
     fn drop(&mut self) {
-        println!("[INFO] managed process still running at exit, terminating...");
+        println!("[DEBUG] managed process finished when expected.");
         if let Ok(None) = self.running_process.try_wait() {
+            println!("[INFO] managed process still running when expected to be finished, terminating...");
             if let Err(e) = self.send_terminate_signal() {
                 eprintln!("[ERROR] failed to send terminate to running process, trying to kill instead: {}", e);
                 if let Err(e) = self.running_process.kill() {
@@ -70,7 +71,7 @@ impl Drop for LaunchedProcess {
                     eprintln!("[ERROR] failed to kill managed process, process may still be running: {}", e);
                 }
             }
+            println!("[INFO] managed process stopped.");
         }
-        println!("[INFO] managed process stopped.");
     }
 }
