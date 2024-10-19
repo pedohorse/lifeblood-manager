@@ -264,7 +264,10 @@ impl MainWidget {
 
         if let Err(_) = tray_manager.add_tray_item("Quit", {
             let hide_instead_of_closing = self.hide_instead_of_closing.clone();
-            move |_| {
+            move |handle| {
+                if let Err(_) = handle.change_label("Quitting...") {
+                    eprintln!("failed to change Quit label when quitting...")
+                }
                 *hide_instead_of_closing.borrow_mut() = false;
                 app::quit();
             }
