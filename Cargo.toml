@@ -27,6 +27,7 @@ toml = "0.8"
 home = "0.5"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+auto-launch = "0.5"
 
 [target.'cfg(not(windows))'.dependencies]
 tray-item = { version = "0.10.0", features = ["ksni"] }
