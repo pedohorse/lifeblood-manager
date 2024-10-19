@@ -1,3 +1,4 @@
+use fltk::app::cairo::autolink_context;
 use fltk::button::CheckButton;
 use fltk::enums::CallbackTrigger;
 use fltk::window::DoubleWindow;
@@ -5,21 +6,19 @@ use fltk::{
     app, button::Button, dialog::NativeFileChooser, frame::Frame, group::Flex, group::Tabs,
     input::FileInput, prelude::*, window::Window,
 };
+#[cfg(windows)]
+use lifeblood_manager::win_console_hack::{free_console, is_console};
 use lifeblood_manager::{
-    theme::*,
-    tray_manager::TrayManager,
-    InstallationWidget, InstallationsData, LaunchWidget, StandardEnvResolverConfigWidget, Widget,
-    WidgetCallbacks, BUILD_INFO,
+    autostart, theme::*, tray_manager::TrayManager, InstallationWidget, InstallationsData,
+    LaunchWidget, StandardEnvResolverConfigWidget, Widget, WidgetCallbacks,
+    BUILD_INFO,
 };
 use std::cell::RefCell;
-use std::env::current_dir;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 #[cfg(windows)]
 use winconsole::window;
-#[cfg(windows)]
-use lifeblood_manager::win_console_hack::{is_console, free_console};
 
 pub struct MainWidget {
     base_path_input: FileInput,
@@ -59,8 +58,12 @@ impl MainWidget {
         // base path input
         let (mut browse_button, base_input) = Self::init_base_path_input(&mut flex);
 
+        let tray_flex = Flex::default_fill().row();
         let mut tray_checkbox = CheckButton::default().with_label("stay in tray");
-        flex.fixed(&tray_checkbox, ITEM_HEIGHT);
+        let mut autostart_checkbox = CheckButton::default().with_label("autostart");
+        autostart_checkbox.deactivate();
+        tray_flex.end();
+        flex.fixed(&tray_flex, ITEM_HEIGHT);
 
         //
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
@@ -98,13 +101,31 @@ impl MainWidget {
 
         tray_checkbox.set_callback({
             let widget = widget.clone();
+            let mut autostart_checkbox = autostart_checkbox.clone();
             move |chb| {
                 if chb.is_checked() {
                     widget.lock().unwrap().add_tray_item();
                     chb.deactivate(); // removing tray item is not currently supported
+                    autostart_checkbox.activate();
                 } else {
                     // removing tray item is not currently supported
                     //widget.lock().unwrap().remove_tray_item();
+                }
+            }
+        });
+
+        autostart_checkbox.set_callback({
+            move |chkb| {
+                if chkb.is_checked() {
+                    if let Err(e) = autostart::enable(&vec!["--minimize-to-tray"]) {
+                        eprintln!("failed to enable autostart: {:?}", e);
+                        chkb.set_checked(false);
+                    };
+                } else {
+                    if let Err(e) = autostart::disable() {
+                        eprintln!("failed to disable autostart: {:?}", e);
+                        chkb.set_checked(true);
+                    };
                 }
             }
         });
@@ -154,6 +175,22 @@ impl MainWidget {
                 widget_to_cb.lock().unwrap().change_install_dir(&input_path);
             }
         });
+
+        if do_tray {
+            tray_checkbox.set_checked(true);
+            tray_checkbox.do_callback();
+        }
+        {
+            // check autostart
+            if !autostart::is_supported() {
+                eprintln!("autostart is not supported on this platform");
+                autostart_checkbox.deactivate();
+            } else {
+                if autostart::is_enabled() {
+                    autostart_checkbox.set_checked(true);
+                }
+            }
+        }
 
         // lastly, initialize
         widget.lock().unwrap().change_install_dir(path);
@@ -263,6 +300,22 @@ fn main() {
         window::hide();
     }
 
+    let mut do_tray = false;
+    let mut dont_show = false;
+    let mut maybe_args = env::args().skip(1);
+    while let Some(arg) = maybe_args.next() {
+        match arg.as_str() {
+            "--minimize-to-tray" => {
+                do_tray = true;
+                dont_show = true;
+            }
+            s => {
+                eprintln!("unrecognized argument: {}", s);
+                continue;
+            }
+        }
+    }
+
     app::App::default().with_scheme(app::Scheme::Gtk);
     app::set_background_color(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2]);
     app::set_foreground_color(FG_COLOR[0], FG_COLOR[1], FG_COLOR[2]);
@@ -274,7 +327,7 @@ fn main() {
         .with_size(650, 600)
         .with_label(&format!("Lifeblood Manager {}", BUILD_INFO));
 
-    let main_widget = MainWidget::new(&current_dir, &mut wind, false);
+    let main_widget = MainWidget::new(&current_dir, &mut wind, do_tray);
     // TODO: i've made all this widget-centric instead of data-centric, and now have trouble separating
     // widget from tray events.
     // Ideally this needs to be refactored so that control data is passed TO widgets, not created by them
@@ -283,12 +336,15 @@ fn main() {
     wind.end();
 
     wind.make_resizable(true);
-    wind.show();
+    if !dont_show {
+        wind.show();
+    }
 
     loop {
         // "event" loop
         //app.run().expect("failed to run fltk main loop");
-        app::wait_for(0.01).expect("event loop broke");
+        let poll_time = if wind.shown() { 0.01 } else { 0.1 };
+        app::wait_for(poll_time).expect("event loop broke");
         if !wind.shown() && !main_widget.lock().unwrap().hide_insted_of_closing() {
             break;
         }
