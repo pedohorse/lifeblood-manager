@@ -10,17 +10,19 @@ use fltk::{
 use lifeblood_manager::win_console_hack::{free_console, is_console};
 use lifeblood_manager::{
     autostart, theme::*, tray_manager::TrayManager, InstallationWidget, InstallationsData,
-    LaunchWidget, StandardEnvResolverConfigWidget, Widget, WidgetCallbacks,
+    LaunchWidget, MainWidgetConfig, StandardEnvResolverConfigWidget, Widget, WidgetCallbacks,
     BUILD_INFO,
 };
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::env;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 #[cfg(windows)]
 use winconsole::window;
 
 pub struct MainWidget {
+    config: Rc<RefCell<MainWidgetConfig>>,
     base_path_input: FileInput,
     sub_widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>>,
     install_data: Option<Arc<Mutex<InstallationsData>>>,
@@ -52,10 +54,16 @@ impl MainWidget {
         (browse_button, base_input)
     }
 
-    pub fn new(path: &PathBuf, wind: &mut DoubleWindow, do_tray: bool) -> Arc<Mutex<Self>> {
+    pub fn new(path: &Path, wind: &mut DoubleWindow, do_tray: bool) -> Arc<Mutex<Self>> {
         let mut flex = Flex::default_fill().column();
         // one shared install location
         // base path input
+
+        let config = MainWidgetConfig::new_from_file(path, true, true)
+            .expect("unexpected error loading config"); // considering given flags - this should not happen
+        drop(path);  // to not accidently access it as install base path which it is not
+        let config = Rc::new(RefCell::new(config));
+
         let (mut browse_button, base_input) = Self::init_base_path_input(&mut flex);
 
         let tray_flex = Flex::default_fill().row();
@@ -69,9 +77,9 @@ impl MainWidget {
         let mut widgets: Vec<Arc<Mutex<dyn WidgetCallbacks>>> = Vec::new();
 
         let mut tabs = Tabs::default_fill(); //.with_size(128, 111);
-        let (install_widget, _) = InstallationWidget::initialize();
-        let (launch_widget, tab_header_flex) = LaunchWidget::initialize();
-        let (env_widget, _) = StandardEnvResolverConfigWidget::initialize();
+        let (install_widget, _) = InstallationWidget::initialize(config.clone());
+        let (launch_widget, tab_header_flex) = LaunchWidget::initialize(config.clone());
+        let (env_widget, _) = StandardEnvResolverConfigWidget::initialize(config.clone());
 
         tabs.end();
         tabs.resizable(&tab_header_flex);
@@ -82,13 +90,14 @@ impl MainWidget {
         }
 
         widgets.push(install_widget);
-        widgets.push(launch_widget);
+        widgets.push(launch_widget.clone());
         widgets.push(env_widget);
 
         flex.end();
 
         // widget data
         let widget = Arc::new(Mutex::new(MainWidget {
+            config: config.clone(),
             base_path_input: base_input,
             sub_widgets: widgets,
             install_data: None,
@@ -193,7 +202,15 @@ impl MainWidget {
         }
 
         // lastly, initialize
-        widget.lock().unwrap().change_install_dir(path);
+        {
+            let mut widget_borrowed = widget.lock().unwrap();
+            let config = config.borrow();
+            widget_borrowed.change_install_dir(config.base_install_path());
+
+            for subwidget in widget_borrowed.sub_widgets.iter() {
+                subwidget.lock().unwrap().post_initialize();
+            }
+        }
 
         widget
     }
@@ -269,9 +286,9 @@ impl MainWidget {
         *self.hide_instead_of_closing.borrow_mut() = true;
     }
 
-    pub fn change_install_dir(&mut self, new_path: &PathBuf) {
+    pub fn change_install_dir(&mut self, new_path: &Path) {
         // update input
-        self.install_data = match InstallationsData::from_dir(new_path.clone()) {
+        self.install_data = match InstallationsData::from_dir(new_path.to_path_buf()) {
             Ok(x) => Some(Arc::new(Mutex::new(x))),
             _ => {
                 println!("no versions found");
@@ -285,11 +302,19 @@ impl MainWidget {
                 .unwrap()
                 .install_location_changed(&new_path, self.install_data.as_ref());
         }
+
+        if self.config.borrow().base_install_path() != new_path {
+            let mut config = self.config.borrow_mut();
+            config.set_base_install_path(new_path);
+            if let Err(e) = config.write_to_file() {
+                eprintln!("error saving config: {}", e);
+            }
+        }
     }
 }
 
 fn main() {
-    let current_dir = if let Ok(d) = current_dir() {
+    let current_dir = if let Ok(d) = env::current_dir() {
         d
     } else {
         panic!("failed to get current dir!");
