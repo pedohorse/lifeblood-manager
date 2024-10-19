@@ -239,7 +239,7 @@ impl LaunchWidget {
         let main_margin = 8;
         let margin = 2; // a guess
         flex.set_margin(main_margin);
-        let mut group_height = 2 * main_margin + label_size + ITEM_HEIGHT + 4 * margin;
+        let mut group_height = 2 * main_margin + label_size + 2*ITEM_HEIGHT + 4 * margin;
 
         let mut button_box = Flex::default_fill().column();
 
@@ -333,10 +333,10 @@ impl LaunchWidget {
         let mut stop_button = Button::default_fill().with_label("stop");
         button_group.end();
         button_box.fixed(&button_group, ITEM_HEIGHT);
-        button_box.end();
         if control_data.borrow().allow_autostart() {
             let control_data = control_data.borrow();
             let mut autostart_checkbox = CheckButton::default().with_label("start automatically");
+            button_box.fixed(&autostart_checkbox, ITEM_HEIGHT);
             autostart_checkbox.set_checked(self.config.borrow().has_autostart_launch_id(&control_data.launch_id()));
 
             autostart_checkbox.set_callback({
@@ -355,6 +355,7 @@ impl LaunchWidget {
                 }
             });
         }
+        button_box.end();
 
         let info_box = Flex::default_fill().column();
         let pid_label = Frame::default().with_label("not running");
