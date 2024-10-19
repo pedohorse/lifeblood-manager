@@ -125,6 +125,7 @@ pub struct LaunchControlData {
     _command: String,
     _args: Vec<String>,
     _args_options: Vec<LaunchControlDataOption>,
+    _allow_autostart: bool,
     _current_installation: Option<Arc<Mutex<InstallationsData>>>,
     _last_run_exit_code: Option<i32>,
     _current_installation_changed_callback:
@@ -143,6 +144,7 @@ impl LaunchControlData {
         command: &str,
         args: Vec<&str>,
         args_options: Option<Vec<LaunchControlDataOption>>,
+        allow_autostart: bool,
     ) -> LaunchControlData {
         LaunchControlData {
             _id: launch_id.to_owned(),
@@ -156,6 +158,7 @@ impl LaunchControlData {
             } else {
                 Vec::new()
             },
+            _allow_autostart: allow_autostart,
             _current_installation: if let Some(x) = installations {
                 Some(x.clone())
             } else {
@@ -164,6 +167,10 @@ impl LaunchControlData {
             _last_run_exit_code: None,
             _current_installation_changed_callback: None,
         }
+    }
+
+    pub fn allow_autostart(&self) -> bool {
+        self._allow_autostart
     }
 
     pub fn args_options(&self) -> &Vec<LaunchControlDataOption> {
