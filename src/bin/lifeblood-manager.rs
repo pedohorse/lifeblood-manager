@@ -314,8 +314,9 @@ impl MainWidget {
 }
 
 fn main() {
-    let current_dir = if let Ok(d) = env::current_dir() {
-        d
+    let current_exe = env::current_exe();
+    let current_dir = if let Ok(ref d) = current_exe {
+        d.parent().expect("failed to get dir of current executable")
     } else {
         panic!("failed to get current dir!");
     };
