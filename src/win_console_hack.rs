@@ -16,6 +16,9 @@ pub fn free_console() -> bool {
         FreeConsole() == 0 
     } 
 }
+
+///
+/// returns true if app was started from console
 pub fn is_console() -> bool {
     unsafe {
         let mut buffer = [0u32; 1];
@@ -24,6 +27,8 @@ pub fn is_console() -> bool {
     }
 }
 
+///
+/// returns true if app is a console app, not used now
 pub fn has_console() -> bool {
     unsafe {
         let mut buffer = [0u32; 1];
