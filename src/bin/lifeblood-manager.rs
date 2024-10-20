@@ -54,14 +54,13 @@ impl MainWidget {
         (browse_button, base_input)
     }
 
-    pub fn new(path: &Path, wind: &mut DoubleWindow, do_tray: bool) -> Arc<Mutex<Self>> {
+    pub fn new(base_config_path: &Path, wind: &mut DoubleWindow, do_tray: bool) -> Arc<Mutex<Self>> {
         let mut flex = Flex::default_fill().column();
         // one shared install location
         // base path input
 
-        let config = MainWidgetConfig::new_from_file(path, true, true)
+        let config = MainWidgetConfig::new_from_file(base_config_path, true, true)
             .expect("unexpected error loading config"); // considering given flags - this should not happen
-        drop(path);  // to not accidently access it as install base path which it is not
         let config = Rc::new(RefCell::new(config));
 
         let (mut browse_button, base_input) = Self::init_base_path_input(&mut flex);
