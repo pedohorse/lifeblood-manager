@@ -1,4 +1,3 @@
-use fltk::app::cairo::autolink_context;
 use fltk::button::CheckButton;
 use fltk::enums::CallbackTrigger;
 use fltk::window::DoubleWindow;
