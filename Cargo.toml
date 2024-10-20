@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-ui = ["dep:fltk"]
+ui = [
+    "dep:fltk",
+    "dep:tray-item",
+    "dep:embed-resource",
+    "dep:auto-launch",
+]
 
 [[bin]]
 name = "lifeblood-manager"
@@ -27,14 +32,14 @@ toml = "0.8"
 home = "0.5"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-auto-launch = "0.5"
+auto-launch = { version = "0.5", optional=true }
 
 [target.'cfg(not(windows))'.dependencies]
-tray-item = { version = "0.10.0", features = ["ksni"] }
+tray-item = { version = "0.10.0", features = ["ksni"], optional=true }
 
 [target.'cfg(windows)'.dependencies]
-winconsole = { version = "0.11", features = [ "window" ] }
-tray-item = { version = "0.10.0"}
+winconsole = { version = "0.11", features = [ "window" ]}
+tray-item = { version = "0.10.0", optional=true}
 
 [target.'cfg(windows)'.build-dependencies]
-embed-resource = "2.5"
+embed-resource = { version = "2.5", optional=true }
