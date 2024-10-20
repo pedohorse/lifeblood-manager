@@ -27,6 +27,8 @@ use std::{
     sync::{Mutex, TryLockError},
 };
 use std::{sync::Arc, thread, time::Duration};
+#[cfg(windows)]
+use winconsole::window;
 
 const DEFAULT_BRANCH: &str = "dev";
 
@@ -409,6 +411,14 @@ impl Widget for InstallationWidget {
             let ignore_system_python = ignore_system_python_checkbox.value();
             let mut installation_succeeded = true;
 
+            #[cfg(windows)]
+            let mut hide_console_after = false;
+            #[cfg(windows)]
+            if !window::is_visible() {
+                hide_console_after = true;
+                window::activate(true);
+            }
+
             thread::scope(|scope| {
                 let handle = scope.spawn(|| {
                     let guard = &mut widget_to_cb.lock().unwrap();
@@ -486,6 +496,11 @@ impl Widget for InstallationWidget {
             });
 
             widget_to_cb.lock().unwrap().update_installation_table();
+
+            #[cfg(windows)]
+            if hide_console_after {
+                window::hide();
+            }
 
             // if conditions are met - also run wizard
             if installation_succeeded {
