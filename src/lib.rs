@@ -12,12 +12,21 @@ pub use installation_data::{InstallationsData, InstalledVersion};
 pub use launch_data::LaunchControlData;
 pub use running_process_data::LaunchedProcess;
 
+#[cfg(windows)]
+pub mod win_console_hack;
+
+#[cfg(feature = "ui")]
+pub mod autostart;
+#[cfg(feature = "ui")]
+pub mod tray_manager;
 #[cfg(feature = "ui")]
 mod widgets;
 #[cfg(feature = "ui")]
 mod installation_widget;
 #[cfg(feature = "ui")]
 mod launch_widget;
+#[cfg(feature = "ui")]
+mod main_widget_config;
 #[cfg(feature = "ui")]
 mod envres_config_widget;
 #[cfg(feature = "ui")]
@@ -26,6 +35,8 @@ pub mod theme;
 pub use installation_widget::InstallationWidget;
 #[cfg(feature = "ui")]
 pub use launch_widget::LaunchWidget;
+#[cfg(feature = "ui")]
+pub use main_widget_config::MainWidgetConfig;
 #[cfg(feature = "ui")]
 pub use envres_config_widget::StandardEnvResolverConfigWidget;
 #[cfg(feature = "ui")]

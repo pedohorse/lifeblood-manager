@@ -270,6 +270,7 @@ impl InstallationsData {
                                 && !path.ends_with("lifeblood.cmd")
                                 && !path.ends_with("lifeblood_viewer")
                                 && !path.ends_with("lifeblood_viewer.cmd")
+                                && !path.ends_with("lifeblood-manager.config")
                             {
                                 base_path_tainted = true;
                                 println!("skipping {:?}", path);

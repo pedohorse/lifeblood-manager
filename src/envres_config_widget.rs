@@ -1,7 +1,9 @@
 use crate::config_data::{ConfigData, ConfigError, ConfigWritingError};
 use crate::config_data_collection::ConfigDataCollection;
 use crate::info_dialog::{ChoiceDialog, InfoDialog};
+use crate::main_widget_config::MainWidgetConfig;
 use crate::theme::ITEM_HEIGHT;
+use crate::tray_manager::TrayManager;
 use crate::widgets::{Widget, WidgetCallbacks};
 use crate::InstallationsData;
 use fltk::button::Button;
@@ -11,7 +13,9 @@ use fltk::group::Flex;
 use fltk::input::FileInput;
 use fltk::text::{TextBuffer, TextEditor};
 use fltk::{app, prelude::*};
-use std::path::PathBuf;
+use std::cell::RefCell;
+use std::path::Path;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 pub struct StandardEnvResolverConfigWidget {
@@ -20,7 +24,7 @@ pub struct StandardEnvResolverConfigWidget {
 }
 
 impl Widget for StandardEnvResolverConfigWidget {
-    fn initialize() -> (Arc<Mutex<Self>>, Flex) {
+    fn initialize(_config: Rc<RefCell<MainWidgetConfig>>) -> (Arc<Mutex<Self>>, Flex) {
         let tab_header = Flex::default_fill()
             .with_label("Environment Resolver Config\t")
             .row();
@@ -107,17 +111,21 @@ impl Widget for StandardEnvResolverConfigWidget {
 impl WidgetCallbacks for StandardEnvResolverConfigWidget {
     fn install_location_changed(
         &mut self,
-        _path: &PathBuf,
+        _path: &Path,
         _install_data: Option<&Arc<Mutex<InstallationsData>>>,
     ) {
         // do nothing
     }
+
+    fn generate_tray_items(&mut self, tray_manager: &mut TrayManager) {}
 
     fn on_tab_selected(&mut self) {
         if !self.has_unsaved_changes {
             self.reload_config();
         }
     }
+
+    fn post_initialize(&mut self) {}
 }
 
 impl StandardEnvResolverConfigWidget {
