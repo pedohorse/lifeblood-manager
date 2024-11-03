@@ -146,6 +146,13 @@ impl WizardActivityTrait for HoudiniToolsActivity {
     }
 
     fn validate(&self) -> Result<(), &str> {
+        if let Some(paths) = self.get_tools_install_locations() {
+            for path in paths {
+                if !path.is_absolute() {
+                    return Err("path must be absolute");
+                }
+            }
+        };
         Ok(())
     }
 
