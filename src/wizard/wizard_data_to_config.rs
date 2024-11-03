@@ -1,11 +1,13 @@
 use super::wizard_data::WizardData;
 pub use super::wizard_data::WizardDataSerialization;
 use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataCollection};
+use downloader::{Downloader, Download};
 use serde::{Deserialize, Serialize};
+use zip::ZipArchive;
 use std::{
-    collections::HashMap,
-    io::{self, Error}, path::Path,
+    collections::HashMap, fs::{self, File}, io::{self, BufReader, Error}, path::Path, time::Duration
 };
+use tempfile::tempdir;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -104,6 +106,62 @@ impl WizardDataSerialization for WizardData {
             },
             Err(_) => panic!("unexpected internal error!"),
         };
+
+        // download and unpack latest release of tools/plugins
+        if self.houdini_plugins_installation_paths.len() > 0 {
+            let temp_location = tempdir()?;
+            let download_location = temp_location.path().join("arch");
+            fs::create_dir(&download_location)?;
+            let tools_location = temp_location.path().join("tools");
+            fs::create_dir(&tools_location)?;
+
+            //download
+            let mut downloader = match Downloader::builder()
+                .connect_timeout(Duration::from_secs(60))
+                .timeout(Duration::from_secs(600))
+                .retries(5)
+                .download_folder(&download_location)
+                .build() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return Err(Error::new(io::ErrorKind::Other, format!("failed to create a downloader: {:?}", e)));
+                    },
+                };
+            println!("[INFO] downloading tools from github...");
+            if let Err(e) = downloader.download(&[Download::new("https://github.com/pedohorse/lifeblood/releases/latest/download/houdini.zip")]) {
+                return Err(Error::new(io::ErrorKind::Other, format!("failed to download houdini tools: {:?}", e)));
+            }
+            let tools_archive_path = download_location.join("houdini.zip"); // TODO: get actual path from downloader, just in case
+
+            // unzip
+            println!("[INFO] extracting tools archive...");
+            let reader = BufReader::new(match File::open(&tools_archive_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    return Err(Error::new(e.kind(), format!("failed to read downloaded archive: {}", e)));
+                }
+            });
+            let mut arch = match ZipArchive::new(reader) {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(Error::new(io::ErrorKind::Other, format!("error reading zip file: {}", e)));
+                }
+            };
+            if let Err(e) = arch.extract(&tools_location) {
+                return Err(Error::new(io::ErrorKind::Other, format!("failed to extract files from tools zip: {}", e)));
+            }
+
+            // now ready to copy
+            for plugin_base_path in self.houdini_plugins_installation_paths.iter() {
+                println!("[INFO] copying houdini tools to: {:?}", plugin_base_path);
+                let mut options = fs_extra::dir::CopyOptions::new();
+                options.overwrite = true;
+                options.content_only = true;
+                if let Err(e) = fs_extra::dir::copy(&tools_location, plugin_base_path, &options) {
+                    return Err(Error::new(io::ErrorKind::Other, format!("error copying houdini tools: {}", e)));
+                }
+            }
+        }
 
         Ok(())
     }
