@@ -1,13 +1,17 @@
 use super::wizard_data::WizardData;
 pub use super::wizard_data::WizardDataSerialization;
 use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataCollection};
-use downloader::{Downloader, Download};
+use downloader::{Download, Downloader};
 use serde::{Deserialize, Serialize};
-use zip::ZipArchive;
 use std::{
-    collections::HashMap, fs::{self, File}, io::{self, BufReader, Error}, path::Path, time::Duration
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, BufReader, Error},
+    path::Path,
+    time::Duration,
 };
 use tempfile::tempdir;
+use zip::ZipArchive;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -121,15 +125,24 @@ impl WizardDataSerialization for WizardData {
                 .timeout(Duration::from_secs(600))
                 .retries(5)
                 .download_folder(&download_location)
-                .build() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        return Err(Error::new(io::ErrorKind::Other, format!("failed to create a downloader: {:?}", e)));
-                    },
-                };
+                .build()
+            {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(Error::new(
+                        io::ErrorKind::Other,
+                        format!("failed to create a downloader: {:?}", e),
+                    ));
+                }
+            };
             println!("[INFO] downloading tools from github...");
-            if let Err(e) = downloader.download(&[Download::new("https://github.com/pedohorse/lifeblood/releases/latest/download/houdini.zip")]) {
-                return Err(Error::new(io::ErrorKind::Other, format!("failed to download houdini tools: {:?}", e)));
+            if let Err(e) = downloader.download(&[Download::new(
+                "https://github.com/pedohorse/lifeblood/releases/latest/download/houdini.zip",
+            )]) {
+                return Err(Error::new(
+                    io::ErrorKind::Other,
+                    format!("failed to download houdini tools: {:?}", e),
+                ));
             }
             let tools_archive_path = download_location.join("houdini.zip"); // TODO: get actual path from downloader, just in case
 
@@ -138,17 +151,26 @@ impl WizardDataSerialization for WizardData {
             let reader = BufReader::new(match File::open(&tools_archive_path) {
                 Ok(f) => f,
                 Err(e) => {
-                    return Err(Error::new(e.kind(), format!("failed to read downloaded archive: {}", e)));
+                    return Err(Error::new(
+                        e.kind(),
+                        format!("failed to read downloaded archive: {}", e),
+                    ));
                 }
             });
             let mut arch = match ZipArchive::new(reader) {
                 Ok(x) => x,
                 Err(e) => {
-                    return Err(Error::new(io::ErrorKind::Other, format!("error reading zip file: {}", e)));
+                    return Err(Error::new(
+                        io::ErrorKind::Other,
+                        format!("error reading zip file: {}", e),
+                    ));
                 }
             };
             if let Err(e) = arch.extract(&tools_location) {
-                return Err(Error::new(io::ErrorKind::Other, format!("failed to extract files from tools zip: {}", e)));
+                return Err(Error::new(
+                    io::ErrorKind::Other,
+                    format!("failed to extract files from tools zip: {}", e),
+                ));
             }
 
             // now ready to copy
@@ -158,7 +180,10 @@ impl WizardDataSerialization for WizardData {
                 options.overwrite = true;
                 options.content_only = true;
                 if let Err(e) = fs_extra::dir::copy(&tools_location, plugin_base_path, &options) {
-                    return Err(Error::new(io::ErrorKind::Other, format!("error copying houdini tools: {}", e)));
+                    return Err(Error::new(
+                        io::ErrorKind::Other,
+                        format!("error copying houdini tools: {}", e),
+                    ));
                 }
             }
         }

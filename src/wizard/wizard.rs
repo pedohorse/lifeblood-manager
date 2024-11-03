@@ -168,7 +168,7 @@ impl Wizard {
                 WizardState::HoudiniTools => {
                     if !self.data.houdini_plugins_paths_first_initialized {
                         self.data.houdini_plugins_paths_first_initialized = true;
-                        
+
                         // initial initialization
                         self.data.houdini_plugins_installation_paths = Vec::new();
                         if let Some(home_path) = home_dir() {
@@ -194,11 +194,20 @@ impl Wizard {
                                     // filter by name
                                     let file_name = dir_entry.file_name();
                                     let dir_name = file_name.to_string_lossy();
-                                    if !dir_name.starts_with("houdini") || !dir_name.chars().skip(7).next().unwrap_or('x').is_numeric() {
+                                    if !dir_name.starts_with("houdini")
+                                        || !dir_name
+                                            .chars()
+                                            .skip(7)
+                                            .next()
+                                            .unwrap_or('x')
+                                            .is_numeric()
+                                    {
                                         continue;
                                     }
                                     // assume entry is acceptible
-                                    self.data.houdini_plugins_installation_paths.push(dir_entry.path());
+                                    self.data
+                                        .houdini_plugins_installation_paths
+                                        .push(dir_entry.path());
                                 }
                             }
                         }
@@ -227,7 +236,12 @@ impl Wizard {
                         self.data.db_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
-                        &self.data.houdini_plugins_installation_paths.iter().map(|x| {x as &Path}).collect::<Vec<_>>(),
+                        &self
+                            .data
+                            .houdini_plugins_installation_paths
+                            .iter()
+                            .map(|x| x as &Path)
+                            .collect::<Vec<_>>(),
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {

@@ -37,5 +37,4 @@ impl WizardData {
             houdini_plugins_installation_paths: Vec::new(),
         }
     }
-
 }

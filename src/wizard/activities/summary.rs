@@ -1,7 +1,7 @@
 use super::super::wizard_activity::WizardActivityTrait;
 use super::super::wizard_data::{BlenderVersion, HoudiniVersion};
 use fltk::misc::HelpView;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct SummaryActivity {
     text: String,

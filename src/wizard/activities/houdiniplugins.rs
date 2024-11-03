@@ -9,7 +9,7 @@ use fltk::dialog::NativeFileChooser;
 use fltk::enums::Align;
 use fltk::group::Flex;
 use fltk::image::PngImage;
-use fltk::input::{FileInput, IntInput};
+use fltk::input::FileInput;
 use fltk::misc::Spinner;
 use fltk::{frame::Frame, prelude::*};
 
@@ -22,7 +22,7 @@ pub struct HoudiniToolsActivity {
 }
 
 impl HoudiniToolsActivity {
-    pub fn new(target_dirs: Vec<PathBuf>) -> HoudiniToolsActivity{
+    pub fn new(target_dirs: Vec<PathBuf>) -> HoudiniToolsActivity {
         HoudiniToolsActivity {
             init_hfs_dirs: target_dirs,
             widgets: None,
@@ -75,7 +75,7 @@ impl WizardActivityTrait for HoudiniToolsActivity {
         main_layout.fixed(&layout, 182);
 
         const MAX_INSTALLS_COUNT: usize = 8;
-        
+
         let mut layout = Flex::default().row();
         let tools_count_label = Frame::default().with_label("number");
         layout.fixed(&tools_count_label, 140);
@@ -119,7 +119,7 @@ impl WizardActivityTrait for HoudiniToolsActivity {
         main_layout.end();
 
         // initialize
-        
+
         for ((layout, input), path) in user_inputs.iter_mut().zip(self.init_hfs_dirs.iter()) {
             layout.show();
             input.set_value(&path.to_string_lossy());
