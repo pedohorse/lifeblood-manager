@@ -1,3 +1,4 @@
+mod houdini_utils;
 mod wizard_data;
 mod wizard_data_to_config;
 
