@@ -4,3 +4,4 @@ pub mod findblender;
 pub mod findhoudini;
 pub mod intro;
 pub mod summary;
+pub mod houdiniplugins;
