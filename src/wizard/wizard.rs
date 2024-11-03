@@ -1,9 +1,9 @@
-use home::home_dir;
 use std::path::{Path, PathBuf};
 
 use crate::info_dialog::InfoDialog;
 use crate::wizard::wizard_data::{BlenderVersion, HoudiniVersion};
 
+use super::houdini_utils::possible_default_user_pref_dirs;
 ///
 /// This is responsible for running wizard activities in proper order
 /// and gathering parts for final configuration
@@ -170,47 +170,8 @@ impl Wizard {
                         self.data.houdini_plugins_paths_first_initialized = true;
 
                         // initial initialization
-                        self.data.houdini_plugins_installation_paths = Vec::new();
-                        if let Some(home_path) = home_dir() {
-                            if let Ok(dir_iter) = home_path.read_dir() {
-                                for entry in dir_iter {
-                                    let dir_entry = match entry {
-                                        Ok(x) => x,
-                                        Err(_) => {
-                                            continue;
-                                        }
-                                    };
-                                    // filter out non-dirs
-                                    match dir_entry.file_type() {
-                                        Ok(x) => {
-                                            if !x.is_dir() {
-                                                continue;
-                                            }
-                                        }
-                                        Err(_) => {
-                                            continue;
-                                        }
-                                    }
-                                    // filter by name
-                                    let file_name = dir_entry.file_name();
-                                    let dir_name = file_name.to_string_lossy();
-                                    if !dir_name.starts_with("houdini")
-                                        || !dir_name
-                                            .chars()
-                                            .skip(7)
-                                            .next()
-                                            .unwrap_or('x')
-                                            .is_numeric()
-                                    {
-                                        continue;
-                                    }
-                                    // assume entry is acceptible
-                                    self.data
-                                        .houdini_plugins_installation_paths
-                                        .push(dir_entry.path());
-                                }
-                            }
-                        }
+                        self.data.houdini_plugins_installation_paths =
+                            possible_default_user_pref_dirs();
                     }
                     let mut activity = activities::houdiniplugins::HoudiniToolsActivity::new(
                         self.data.houdini_plugins_installation_paths.clone(),
