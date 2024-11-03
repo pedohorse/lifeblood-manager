@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use home::home_dir;
+use std::path::{Path, PathBuf};
 
 use crate::info_dialog::InfoDialog;
 use crate::wizard::wizard_data::{BlenderVersion, HoudiniVersion};
@@ -23,6 +24,7 @@ enum WizardState {
     ChooseDCCs,
     FindBlender,
     FindHoudini,
+    HoudiniTools,
     Finalize,
 }
 
@@ -51,7 +53,8 @@ impl Wizard {
                         }
                     }
                 }
-                WizardState::DoDBPath => {  // SKIPPED FOR NOW
+                WizardState::DoDBPath => {
+                    // SKIPPED FOR NOW
                     let mut activity = if let Some(ref path) = self.data.db_path {
                         activities::dbpath::DBPathActivity::from_path(path)
                     } else {
@@ -148,7 +151,7 @@ impl Wizard {
                                     })
                                 }
                             }
-                            self.state = WizardState::Finalize;
+                            self.state = WizardState::HoudiniTools;
                         }
                         ActivityResult::Prev => {
                             if self.data.do_blender {
@@ -162,12 +165,69 @@ impl Wizard {
                         }
                     }
                 }
+                WizardState::HoudiniTools => {
+                    if !self.data.houdini_plugins_paths_first_initialized {
+                        self.data.houdini_plugins_paths_first_initialized = true;
+                        
+                        // initial initialization
+                        self.data.houdini_plugins_installation_paths = Vec::new();
+                        if let Some(home_path) = home_dir() {
+                            if let Ok(dir_iter) = home_path.read_dir() {
+                                for entry in dir_iter {
+                                    let dir_entry = match entry {
+                                        Ok(x) => x,
+                                        Err(_) => {
+                                            continue;
+                                        }
+                                    };
+                                    // filter out non-dirs
+                                    match dir_entry.file_type() {
+                                        Ok(x) => {
+                                            if !x.is_dir() {
+                                                continue;
+                                            }
+                                        }
+                                        Err(_) => {
+                                            continue;
+                                        }
+                                    }
+                                    // filter by name
+                                    let file_name = dir_entry.file_name();
+                                    let dir_name = file_name.to_string_lossy();
+                                    if !dir_name.starts_with("houdini") || !dir_name.chars().skip(7).next().unwrap_or('x').is_numeric() {
+                                        continue;
+                                    }
+                                    // assume entry is acceptible
+                                    self.data.houdini_plugins_installation_paths.push(dir_entry.path());
+                                }
+                            }
+                        }
+                    }
+                    let mut activity = activities::houdiniplugins::HoudiniToolsActivity::new(
+                        self.data.houdini_plugins_installation_paths.clone(),
+                    );
+                    match runner.process(&mut activity) {
+                        ActivityResult::Next => {
+                            if let Some(tools_paths) = activity.get_tools_install_locations() {
+                                self.data.houdini_plugins_installation_paths = tools_paths;
+                            }
+                            self.state = WizardState::Finalize;
+                        }
+                        ActivityResult::Prev => {
+                            self.state = WizardState::FindHoudini;
+                        }
+                        ActivityResult::Abort => {
+                            return;
+                        }
+                    }
+                }
                 WizardState::Finalize => {
                     // show summary
                     let mut activity = activities::summary::SummaryActivity::new(
                         self.data.db_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
+                        &self.data.houdini_plugins_installation_paths.iter().map(|x| {x as &Path}).collect::<Vec<_>>(),
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
@@ -175,7 +235,7 @@ impl Wizard {
                         }
                         ActivityResult::Prev => {
                             if self.data.do_houdini {
-                                self.state = WizardState::FindHoudini;
+                                self.state = WizardState::HoudiniTools;
                             } else if self.data.do_blender {
                                 self.state = WizardState::FindBlender;
                             } else {
@@ -193,7 +253,10 @@ impl Wizard {
         println!("saving config...");
         if let Err(e) = self.data.write_configs(&self.config_root) {
             eprintln!("error saving config: {:?}", e);
-            InfoDialog::show_in_center("failed to save config :(", &format!("error occuerd: {:?}", e));
+            InfoDialog::show_in_center(
+                "failed to save config :(",
+                &format!("error occuerd: {:?}", e),
+            );
         }
     }
 }
