@@ -51,10 +51,20 @@ pub enum ConfigWritingError {
 }
 
 #[derive(Debug)]
-pub struct ConfigLoadError<'a> {
-    pub access_error: Vec<&'a Path>,
-    pub syntax_error: Vec<(&'a Path, (String, Option<std::ops::Range<usize>>))>,
-    pub schema_error: Vec<&'a Path>,
+pub struct ConfigLoadError {
+    pub access_error: Vec<PathBuf>,
+    pub syntax_error: Vec<(PathBuf, (String, Option<std::ops::Range<usize>>))>,
+    pub schema_error: Vec<PathBuf>,
+}
+
+impl ConfigLoadError {
+    pub fn new() -> ConfigLoadError {
+        ConfigLoadError {
+            access_error: Vec::new(),
+            syntax_error: Vec::new(),
+            schema_error: Vec::new(),
+        }
+    }
 }
 
 impl ConfigData {
@@ -132,13 +142,13 @@ impl ConfigData {
                 Ok(mut f) => {
                     let mut config_text = String::new();
                     if let Err(_e) = f.read_to_string(&mut config_text) {
-                        failed_to_reads.push(file_path.as_path());
+                        failed_to_reads.push(file_path.as_path().to_path_buf());
                         continue;
                     }
 
                     if let Err(e) = config_text.parse::<toml::Table>() {
                         syntax_errors
-                            .push((file_path.as_path(), (e.message().to_string(), e.span())));
+                            .push((file_path.as_path().to_path_buf(), (e.message().to_string(), e.span())));
                         continue;
                     }
 
@@ -149,7 +159,7 @@ impl ConfigData {
                 }
                 // generic error? assume failed to read for some reason
                 Err(_) => {
-                    failed_to_reads.push(file_path.as_path());
+                    failed_to_reads.push(file_path.as_path().to_path_buf());
                 }
             }
         }
@@ -202,5 +212,9 @@ impl ConfigData {
         }
 
         Ok(())
+    }
+
+    pub fn main_config_path(&self) -> &Path {
+        &self.main_config_file
     }
 }
