@@ -34,7 +34,7 @@ impl HoudiniToolsActivity {
         if let (Some(widgets), Some(counter)) = (&self.widgets, &self.count_widget) {
             let widgets_borrowed = widgets.borrow();
             let paths_count = counter.value() as usize;
-            let mut ret = Vec::with_capacity(widgets_borrowed.len());
+            let mut ret = Vec::with_capacity(paths_count);
             for (i, file_input) in widgets_borrowed.iter().enumerate() {
                 if i >= paths_count {
                     continue;
