@@ -1,8 +1,8 @@
 use super::wizard_data::WizardData;
 pub use super::wizard_data::WizardDataSerialization;
 use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataCollection};
+use super::wizard_data_serde_common::{EnvAction, EnvConfig, Package, StringOrList};
 use downloader::{Download, Downloader};
-use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -13,30 +13,6 @@ use std::{
 use tempfile::tempdir;
 use zip::ZipArchive;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum StringOrList {
-    String(String),
-    List(Vec<String>),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EnvConfig {
-    packages: HashMap<String, HashMap<String, Package>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Package {
-    label: Option<String>,
-    env: Option<HashMap<String, EnvAction>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EnvAction {
-    append: Option<StringOrList>,
-    prepend: Option<StringOrList>,
-    set: Option<String>,
-}
 
 impl WizardDataSerialization for WizardData {
     fn write_configs(&self, config_root: &Path) -> Result<(), io::Error> {
@@ -190,21 +166,4 @@ impl WizardDataSerialization for WizardData {
 
         Ok(())
     }
-}
-
-#[test]
-fn basic() {
-    let conf_text = "\
-    [packages.\"houdini.py3\".\"19.0.720\"]\n\
-    label = \"SideFX Houdini, with python version 3\"\n\
-    env.PATH.prepend = \"/home/xapkohheh/sw/result/houdinii-19.0.720/bin\"\n\
-    \n\
-    [packages.houdini.\"19.5.569\"]\n\
-    label = \"SideFX Houdini, with python version 3\"\n\
-    env.PATH.prepend = [\"/home/xapkohheh/sw/result/houdini-19.5.569/bin\"]\n\
-    ";
-
-    let config: EnvConfig = toml::from_str(conf_text).unwrap();
-
-    println!("{:?}", config);
 }
