@@ -31,11 +31,11 @@ fn basic() {
     let conf_text = "\
     [packages.\"houdini.3_9\".\"19.0.720\"]\n\
     label = \"SideFX Houdini, with python version 3\"\n\
-    env.PATH.prepend = \"/home/xapkohheh/sw/result/houdinii-19.0.720/bin\"\n\
+    env.PATH.prepend = \"/sw/houdinii-19.0.720/bin\"\n\
     \n\
-    [packages.houdini.3_11\"20.5.569\"]\n\
+    [packages.\"houdini.3_11\".\"20.5.569\"]\n\
     label = \"SideFX Houdini, with python version 3\"\n\
-    env.PATH.prepend = [\"/home/xapkohheh/sw/result/houdini-20.5.569/bin\"]\n\
+    env.PATH.prepend = [\"/sw/houdini-20.5.569/bin\"]\n\
     ";
 
     let config: EnvConfig = toml::from_str(conf_text).unwrap();
