@@ -27,6 +27,7 @@ impl SummaryActivity {
         db_path: Option<&Path>,
         blender_vers: &[BlenderVersion],
         houdini_vers: &[HoudiniVersion],
+        houdini_tools_paths: &[&Path],
     ) -> Self {
         // blender text
         let blender_ver_text = if blender_vers.len() > 0 {
@@ -48,7 +49,7 @@ impl SummaryActivity {
             }
             text
         } else {
-            "No blender versions".to_owned()
+            "<br>No blender versions".to_owned()
         };
 
         // houdini text
@@ -76,7 +77,23 @@ impl SummaryActivity {
             }
             text
         } else {
-            "No Houdini versions".to_owned()
+            "<br>No Houdini versions".to_owned()
+        };
+
+        let houdini_tools_text = if houdini_tools_paths.len() > 0 {
+            let mut text = "\
+                <h4>Submitting tools for Houdini installed to:</h4>\
+                <ul>\
+                \
+            "
+            .to_owned();
+            for path in houdini_tools_paths.iter() {
+                text.push_str(&format!("<li>{}", path.to_string_lossy(),));
+            }
+            text.push_str("</ul>");
+            text
+        } else {
+            "<br>No Lifeblood submitting tools for Houdini will be installed".to_owned()
         };
 
         //
@@ -85,12 +102,13 @@ impl SummaryActivity {
             "\
             <h1>Summary</h1>\
             \
-            <br>Note: existing config files will be overwritten!\
+            <h5>Note: existing config files will be overwritten!</h5>\
             \
             <h3>Database location</h3>\
-            {}
-            {}
-            {}
+            {}\n\
+            {}\n\
+            {}\n\
+            {}\n\
             \
         ",
             if let Some(path) = db_path {
@@ -100,6 +118,7 @@ impl SummaryActivity {
             },
             blender_ver_text,
             houini_ver_text,
+            houdini_tools_text,
         );
         SummaryActivity { text }
     }

@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::info_dialog::InfoDialog;
 use crate::wizard::wizard_data::{BlenderVersion, HoudiniVersion};
 
+use super::houdini_utils::possible_default_user_pref_dirs;
 ///
 /// This is responsible for running wizard activities in proper order
 /// and gathering parts for final configuration
@@ -23,6 +24,7 @@ enum WizardState {
     ChooseDCCs,
     FindBlender,
     FindHoudini,
+    HoudiniTools,
     Finalize,
 }
 
@@ -51,7 +53,8 @@ impl Wizard {
                         }
                     }
                 }
-                WizardState::DoDBPath => {  // SKIPPED FOR NOW
+                WizardState::DoDBPath => {
+                    // SKIPPED FOR NOW
                     let mut activity = if let Some(ref path) = self.data.db_path {
                         activities::dbpath::DBPathActivity::from_path(path)
                     } else {
@@ -148,7 +151,7 @@ impl Wizard {
                                     })
                                 }
                             }
-                            self.state = WizardState::Finalize;
+                            self.state = WizardState::HoudiniTools;
                         }
                         ActivityResult::Prev => {
                             if self.data.do_blender {
@@ -162,12 +165,44 @@ impl Wizard {
                         }
                     }
                 }
+                WizardState::HoudiniTools => {
+                    if !self.data.houdini_plugins_paths_first_initialized {
+                        self.data.houdini_plugins_paths_first_initialized = true;
+
+                        // initial initialization
+                        self.data.houdini_plugins_installation_paths =
+                            possible_default_user_pref_dirs();
+                    }
+                    let mut activity = activities::houdiniplugins::HoudiniToolsActivity::new(
+                        self.data.houdini_plugins_installation_paths.clone(),
+                    );
+                    match runner.process(&mut activity) {
+                        ActivityResult::Next => {
+                            if let Some(tools_paths) = activity.get_tools_install_locations() {
+                                self.data.houdini_plugins_installation_paths = tools_paths;
+                            }
+                            self.state = WizardState::Finalize;
+                        }
+                        ActivityResult::Prev => {
+                            self.state = WizardState::FindHoudini;
+                        }
+                        ActivityResult::Abort => {
+                            return;
+                        }
+                    }
+                }
                 WizardState::Finalize => {
                     // show summary
                     let mut activity = activities::summary::SummaryActivity::new(
                         self.data.db_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
+                        &self
+                            .data
+                            .houdini_plugins_installation_paths
+                            .iter()
+                            .map(|x| x as &Path)
+                            .collect::<Vec<_>>(),
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
@@ -175,7 +210,7 @@ impl Wizard {
                         }
                         ActivityResult::Prev => {
                             if self.data.do_houdini {
-                                self.state = WizardState::FindHoudini;
+                                self.state = WizardState::HoudiniTools;
                             } else if self.data.do_blender {
                                 self.state = WizardState::FindBlender;
                             } else {
@@ -193,7 +228,10 @@ impl Wizard {
         println!("saving config...");
         if let Err(e) = self.data.write_configs(&self.config_root) {
             eprintln!("error saving config: {:?}", e);
-            InfoDialog::show_in_center("failed to save config :(", &format!("error occuerd: {:?}", e));
+            InfoDialog::show_in_center(
+                "failed to save config :(",
+                &format!("error occuerd: {:?}", e),
+            );
         }
     }
 }

@@ -17,6 +17,8 @@ pub struct WizardData {
     pub do_blender: bool,
     pub houdini_versions: Vec<HoudiniVersion>,
     pub blender_versions: Vec<BlenderVersion>,
+    pub houdini_plugins_paths_first_initialized: bool,
+    pub houdini_plugins_installation_paths: Vec<PathBuf>,
 }
 
 pub trait WizardDataSerialization {
@@ -31,7 +33,8 @@ impl WizardData {
             do_blender: false,
             houdini_versions: Vec::new(),
             blender_versions: Vec::new(),
+            houdini_plugins_paths_first_initialized: false,
+            houdini_plugins_installation_paths: Vec::new(),
         }
     }
-
 }
