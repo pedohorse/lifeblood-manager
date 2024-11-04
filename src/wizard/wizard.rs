@@ -9,6 +9,7 @@ use super::houdini_utils::possible_default_user_pref_dirs;
 /// and gathering parts for final configuration
 ///
 use super::wizard_data::WizardData;
+use super::wizard_data_from_config::WizardDataFromConfig;
 use super::wizard_data_to_config::*;
 use super::{activities, wizard_activity::ActivityResult, wizard_activity_runner::ActivityRunner};
 
@@ -31,8 +32,8 @@ enum WizardState {
 impl Wizard {
     pub fn new(config_root: PathBuf) -> Self {
         Wizard {
+            data: WizardData::new_from_config(&config_root).unwrap_or_else(|_| WizardData::new()),
             config_root,
-            data: WizardData::new(),
             state: WizardState::Intro,
         }
     }
