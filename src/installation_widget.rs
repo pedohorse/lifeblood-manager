@@ -5,7 +5,7 @@ use crate::main_widget_config::MainWidgetConfig;
 use crate::theme::*;
 use crate::tray_manager::TrayManager;
 use crate::widgets::{Widget, WidgetCallbacks};
-use crate::wizard::Wizard;
+use crate::wizard::{Wizard, WizardForToolsOnly};
 use crate::InstallationsData;
 use fltk::button::CheckButton;
 use fltk::dialog;
@@ -161,11 +161,15 @@ impl Widget for InstallationWidget {
         let mut control_buttons_group_vertical = Flex::default().column();
         flex.fixed(&control_buttons_group_vertical, 2 * ITEM_HEIGHT);
 
-        let upper_control_row = Flex::default().row();
+        let mut upper_control_row = Flex::default().row();
         control_buttons_group_vertical.fixed(&upper_control_row, ITEM_HEIGHT);
         let ignore_system_python_checkbox =
             CheckButton::default().with_label("ignore system python");
         let mut wizard_button = Button::default().with_label("Config Wizard");
+        wizard_button.set_tooltip("The wizard that will create configuration and install/update DCC submission tools");
+        let mut tools_only_wizard_button = Button::default().with_label("Tools Update");
+        upper_control_row.fixed(&tools_only_wizard_button, 100);
+        tools_only_wizard_button.set_tooltip("The wizard to only install/update DCC submission tools");
         upper_control_row.end();
 
         let mut version_control_flex = Flex::default().row();
@@ -515,6 +519,10 @@ impl Widget for InstallationWidget {
         // wizard callback
         wizard_button.set_callback(|_| {
             let mut wizard = Wizard::new(ConfigDataCollection::default_config_location());
+            wizard.run();
+        });
+        tools_only_wizard_button.set_callback(|_| {
+            let mut wizard = WizardForToolsOnly::new();
             wizard.run();
         });
 
