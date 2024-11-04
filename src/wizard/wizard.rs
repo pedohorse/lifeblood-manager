@@ -195,6 +195,8 @@ impl Wizard {
                 WizardState::Finalize => {
                     // show summary
                     let mut activity = activities::summary::SummaryActivity::new(
+                        true,
+                        true,
                         self.data.db_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
@@ -227,7 +229,7 @@ impl Wizard {
         }
 
         println!("saving config...");
-        if let Err(e) = self.data.write_configs(&self.config_root) {
+        if let Err(e) = self.data.execute_all_wizardry(&self.config_root) {
             eprintln!("error saving config: {:?}", e);
             InfoDialog::show_in_center(
                 "failed to save config :(",

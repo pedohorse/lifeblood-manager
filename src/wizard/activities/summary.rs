@@ -24,6 +24,8 @@ impl WizardActivityTrait for SummaryActivity {
 
 impl SummaryActivity {
     pub fn new(
+        show_config_part: bool,
+        show_tools_part: bool,
         db_path: Option<&Path>,
         blender_vers: &[BlenderVersion],
         houdini_vers: &[HoudiniVersion],
@@ -34,19 +36,17 @@ impl SummaryActivity {
             let mut text = format!(
                 "\
                 <h3>Blender Versions:</h3>\
+                <ul>\
                 \
             "
             );
             for ver in blender_vers.iter() {
                 text.push_str(&format!(
-                    "\
-                <ul>\
-                <li>blender [{}.{}.{}]: {:?}\
-                </ul>\
-                ",
+                    "<li>blender [{}.{}.{}]: {:?}",
                     ver.version.0, ver.version.1, ver.version.2, &ver.bin_path
                 ));
             }
+            text.push_str("</ul>");
             text
         } else {
             "<br>No blender versions".to_owned()
@@ -57,16 +57,13 @@ impl SummaryActivity {
             let mut text = format!(
                 "\
                 <h3>Houdini Versions:</h3>\
+                <ul>\
                 \
             "
             );
             for ver in houdini_vers.iter() {
                 text.push_str(&format!(
-                    "\
-                <ul>\
-                <li>houdini.py{}_{} [{}.{}.{}]: {:?}\
-                </ul>\
-                ",
+                    "<li>houdini.py{}_{} [{}.{}.{}]: {:?}",
                     ver.python_version.0,
                     ver.python_version.1,
                     ver.version.0,
@@ -75,6 +72,7 @@ impl SummaryActivity {
                     &ver.bin_path
                 ));
             }
+            text.push_str("</ul>");
             text
         } else {
             "<br>No Houdini versions".to_owned()
@@ -98,19 +96,15 @@ impl SummaryActivity {
 
         //
 
-        let text = format!(
+        let config_summary = format!(
             "\
-            <h1>Summary</h1>\
-            \
             <h5>Note: existing config files will be overwritten!</h5>\
             \
             <h3>Database location</h3>\
             {}\n\
             {}\n\
             {}\n\
-            {}\n\
-            \
-        ",
+            ",
             if let Some(path) = db_path {
                 path.to_str().unwrap_or("<display error>")
             } else {
@@ -118,7 +112,30 @@ impl SummaryActivity {
             },
             blender_ver_text,
             houini_ver_text,
-            houdini_tools_text,
+        );
+
+        let tools_summary = format!(
+            "\
+            <h3>Tools:</h3>\
+            {}\
+            ",
+            houdini_tools_text
+        );
+
+        let text = format!(
+            "\
+            <h1>Summary</h1>\
+            \
+            {}\
+            {}\
+            \
+            ",
+            if show_config_part {
+                &config_summary
+            } else {
+                ""
+            },
+            if show_tools_part { &tools_summary } else { "" },
         );
         SummaryActivity { text }
     }
