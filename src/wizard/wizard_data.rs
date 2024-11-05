@@ -22,7 +22,14 @@ pub struct WizardData {
 }
 
 pub trait WizardDataSerialization {
+    fn execute_all_wizardry(&self, config_root: &Path) -> Result<(), std::io::Error> {
+        self.write_configs(config_root)?;
+        self.install_tools()?;
+        Ok(())
+    }
+
     fn write_configs(&self, config_root: &Path) -> Result<(), std::io::Error>;
+    fn install_tools(&self) -> Result<(), std::io::Error>;
 }
 
 impl WizardData {

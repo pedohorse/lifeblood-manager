@@ -86,7 +86,10 @@ impl WizardDataSerialization for WizardData {
             },
             Err(_) => panic!("unexpected internal error!"),
         };
+        Ok(())
+    }
 
+    fn install_tools(&self) -> Result<(), std::io::Error> {
         // download and unpack latest release of tools/plugins
         if self.houdini_plugins_installation_paths.len() > 0 {
             let temp_location = tempdir()?;
