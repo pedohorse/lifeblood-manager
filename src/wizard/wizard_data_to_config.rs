@@ -47,7 +47,7 @@ impl WizardDataSerialization for WizardData {
         let mut conf_packages = HashMap::new();
         for ver in self.houdini_versions.iter() {
             let hou_package_name =
-                format!("houdini.{}_{}", ver.python_version.0, ver.python_version.1);
+                format!("houdini.py{}_{}", ver.python_version.0, ver.python_version.1);
             if !conf_packages.contains_key(&hou_package_name) {
                 conf_packages.insert(hou_package_name.to_owned(), HashMap::new());
             }
