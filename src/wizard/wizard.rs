@@ -228,11 +228,11 @@ impl Wizard {
             }
         }
 
-        println!("saving config...");
+        println!("executing wizardry...");
         if let Err(e) = self.data.execute_all_wizardry(&self.config_root) {
-            eprintln!("error saving config: {:?}", e);
+            eprintln!("error executing wizardry: {:?}", e);
             InfoDialog::show_in_center(
-                "failed to save config :(",
+                "failed to execute wizardry :(",
                 &format!("error occuerd: {:?}", e),
             );
         }
