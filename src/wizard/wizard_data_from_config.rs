@@ -75,8 +75,9 @@ impl WizardDataFromConfig for WizardData {
                 }};
             }
 
-            if package_name.starts_with("houdini.") {
-                let pyver_parts: Vec<&str> = package_name[8..].split('_').collect();
+            if package_name.starts_with("houdini.py") || package_name.starts_with("houdini.") {
+                let pname_offset = if package_name.starts_with("houdini.py") { 10 } else { 8 };
+                let pyver_parts: Vec<&str> = package_name[pname_offset..].split('_').collect();
                 if pyver_parts.len() != 2 {
                     continue;
                 }
