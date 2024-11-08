@@ -13,6 +13,7 @@ pub struct BlenderVersion {
 
 pub struct WizardData {
     pub db_path: Option<PathBuf>,
+    pub scratch_path: Option<PathBuf>,
     pub do_houdini: bool,
     pub do_blender: bool,
     pub houdini_versions: Vec<HoudiniVersion>,
@@ -36,6 +37,7 @@ impl WizardData {
     pub fn new() -> Self {
         WizardData {
             db_path: None,
+            scratch_path: None,
             do_houdini: false,
             do_blender: false,
             houdini_versions: Vec::new(),
