@@ -4,11 +4,7 @@ use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataC
 use super::wizard_data_serde_common::{EnvAction, EnvConfig, Package, StringOrList};
 use downloader::{Download, Downloader};
 use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::{self, BufReader, Error},
-    path::Path,
-    time::Duration,
+    collections::HashMap, fs::{self, File}, io::{self, BufReader, Error}, iter::Map, path::Path, time::Duration
 };
 use tempfile::tempdir;
 use zip::ZipArchive;
@@ -20,6 +16,26 @@ impl WizardDataSerialization for WizardData {
 
         if let Some(_) = self.db_path {
             panic!("DATABASE CONFIGURATION IS NOT YET IMPLEMENTED")
+        }
+
+        if let Some(path) = &self.scratch_path {
+            let mut config_data = config_collection.get_config_data("scheduler");
+            let mut conf = toml::Table::new();
+            let mut conf_sched = toml::Table::new();
+            let mut conf_globals = toml::Table::new();
+            conf_globals.insert("global_scratch_location".to_string(), toml::Value::String(path.to_string_lossy().to_string()));
+            conf_sched.insert("globals".to_string(), toml::Value::Table(conf_globals));
+            conf.insert("scheduler".to_string(), toml::Value::Table(conf_sched));
+            
+            let text = match toml::to_string_pretty(&conf) {
+                Ok(x) => x,
+                Err(_) => panic!("unexpected internal error!"),
+            };
+            match config_data.set_additional_config_text("00-autolbm-scratch-location", &text) {
+                Err(ConfigWritingError::IoError(e)) => return Err(e),
+                Err(e) => return Err(Error::new(io::ErrorKind::Other, format!("{:?}", e))),
+                _ => (),
+            }
         }
 
         let mut config = config_collection.get_config_data("standard_environment_resolver");
