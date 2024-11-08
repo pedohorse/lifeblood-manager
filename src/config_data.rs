@@ -214,6 +214,28 @@ impl ConfigData {
         Ok(())
     }
 
+    pub fn set_additional_config_text(&mut self, additional_config_name: &str, config_text: &str) -> Result<(), ConfigWritingError> {
+        if let Err(e) = Self::validate_config_text(config_text) {
+            return Err(ConfigWritingError::ConfigError(e));
+        }
+
+        let root_dir = self.main_config_file.with_extension("d");
+        if !root_dir.exists() {
+            if let Err(e) = std::fs::create_dir_all(&root_dir) {
+                return Err(ConfigWritingError::IoError(e));
+            }
+        }
+
+        {
+            let mut file = File::create(root_dir.join(additional_config_name).with_extension("toml")).unwrap();
+            if let Err(e) = file.write_all(config_text.as_bytes()) {
+                return Err(ConfigWritingError::IoError(e));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn main_config_path(&self) -> &Path {
         &self.main_config_file
     }
