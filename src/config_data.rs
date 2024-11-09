@@ -1,5 +1,6 @@
 use semver::Version;
-use std::fs::File;
+use std::collections::HashMap;
+use std::fs::{self, File};
 use std::{
     fmt::Debug,
     io::{self, Read, Write},
@@ -18,7 +19,7 @@ use toml;
 pub struct ConfigData {
     name: String,
     main_config_file: PathBuf,
-    additional_config_files: Vec<PathBuf>,
+    additional_config_files: HashMap<String, PathBuf>,
 }
 
 pub enum ConfigError {
@@ -73,17 +74,25 @@ impl ConfigData {
         let mut main_path = base_path.join(Path::new(base_name));
         let mut d_path = main_path.clone();
         main_path.set_extension("toml");
-        d_path.set_extension(".d");
-        let mut d_paths = Vec::new();
+        d_path.set_extension("d");
+        let mut d_paths = HashMap::new();
 
         if d_path.exists() && d_path.is_dir() {
             for dir_entry_maybe in d_path.read_dir().unwrap() {
                 if let Ok(dir_entry) = dir_entry_maybe {
-                    d_paths.push(dir_entry.path());
+                    d_paths.insert(
+                        dir_entry
+                            .path()
+                            .with_extension("")
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string(),
+                        dir_entry.path(),
+                    );
                 }
             }
         }
-        d_paths.sort();
 
         ConfigData {
             name: base_name.to_string(),
@@ -136,7 +145,7 @@ impl ConfigData {
 
         for file_path in [&self.main_config_file]
             .into_iter()
-            .chain(self.additional_config_files.iter())
+            .chain(self.additional_config_files.values())
         {
             match File::open(file_path) {
                 Ok(mut f) => {
@@ -147,8 +156,10 @@ impl ConfigData {
                     }
 
                     if let Err(e) = config_text.parse::<toml::Table>() {
-                        syntax_errors
-                            .push((file_path.as_path().to_path_buf(), (e.message().to_string(), e.span())));
+                        syntax_errors.push((
+                            file_path.as_path().to_path_buf(),
+                            (e.message().to_string(), e.span()),
+                        ));
                         continue;
                     }
 
@@ -205,10 +216,93 @@ impl ConfigData {
         }
 
         {
+            println!("writing {:?}", self.main_config_file);
             let mut file = File::create(&self.main_config_file).unwrap();
             if let Err(e) = file.write_all(config_text.as_bytes()) {
                 return Err(ConfigWritingError::IoError(e));
             }
+        }
+
+        Ok(())
+    }
+
+    pub fn additional_config_text(&self, config_name: &str) -> Option<String> {
+        if let Some(config_path) = self.additional_config_files.get(config_name) {
+            println!("opening {:?}", config_path);
+            match File::open(&config_path) {
+                Ok(mut f) => {
+                    let mut text = String::new();
+                    if let Err(_) = f.read_to_string(&mut text) {
+                        // TODO: MAYBE some errors should be treated separately?
+                        return Some(String::new());
+                    }
+                    return Some(text);
+                }
+                Err(_) => {
+                    return Some(String::new());
+                }
+            }
+        } else {
+            return None;
+        }
+    }
+
+    pub fn additional_config_path(&self, config_name: &str) -> Option<&Path> {
+        if let Some(config_path) = self.additional_config_files.get(config_name) {
+            Some(config_path)
+        } else {
+            None
+        }
+    }
+
+    pub fn remove_additional_config(&mut self, config_name: &str) -> Result<Option<()>, io::Error> {
+        if let Some(path) = self.additional_config_files.get(config_name) {
+            println!("removing {:?}", path);
+            fs::remove_file(path)?;
+            self.additional_config_files.remove(config_name);
+            Ok(Some(()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_additional_config_text(
+        &mut self,
+        additional_config_name: &str,
+        config_text: &str,
+    ) -> Result<(), ConfigWritingError> {
+        if let Err(e) = Self::validate_config_text(config_text) {
+            return Err(ConfigWritingError::ConfigError(e));
+        }
+
+        let root_dir = self.main_config_file.with_extension("d");
+        if !root_dir.exists() {
+            if let Err(e) = std::fs::create_dir_all(&root_dir) {
+                return Err(ConfigWritingError::IoError(e));
+            }
+        }
+
+        let default_config_path = root_dir.join(additional_config_name).with_extension("toml");
+        let config_path = self
+            .additional_config_files
+            .get(additional_config_name)
+            .unwrap_or(&default_config_path);
+
+        {
+            println!("writing {:?}", config_path);
+            let mut file = File::create(config_path).unwrap();
+            if let Err(e) = file.write_all(config_text.as_bytes()) {
+                return Err(ConfigWritingError::IoError(e));
+            }
+        }
+        if !self
+            .additional_config_files
+            .contains_key(additional_config_name)
+        {
+            self.additional_config_files.insert(
+                additional_config_name.to_string(),
+                config_path.to_path_buf(),
+            );
         }
 
         Ok(())

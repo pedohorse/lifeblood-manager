@@ -22,6 +22,7 @@ pub struct Wizard {
 enum WizardState {
     Intro,
     DoDBPath,
+    DoScratchPath,
     ChooseDCCs,
     FindBlender,
     FindHoudini,
@@ -47,7 +48,7 @@ impl Wizard {
                     let mut activity = activities::intro::IntroActivity::new();
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
-                            self.state = WizardState::ChooseDCCs;
+                            self.state = WizardState::DoScratchPath;
                         }
                         ActivityResult::Prev | ActivityResult::Abort => {
                             return;
@@ -75,6 +76,26 @@ impl Wizard {
                         }
                     }
                 }
+                WizardState::DoScratchPath => {
+                    let mut activity = if let Some(ref path) = self.data.scratch_path {
+                        activities::scratchpath::ScratchLocationPathActivity::from_path(path)
+                    } else {
+                        activities::scratchpath::ScratchLocationPathActivity::new()
+                    };
+
+                    match runner.process(&mut activity) {
+                        ActivityResult::Next => {
+                            self.data.scratch_path = activity.selected_path();
+                            self.state = WizardState::ChooseDCCs;
+                        }
+                        ActivityResult::Prev => {
+                            self.state = WizardState::Intro;
+                        }
+                        ActivityResult::Abort => {
+                            return;
+                        }
+                    }
+                }
                 WizardState::ChooseDCCs => {
                     let mut activity = activities::dcctypes::DCCTypesActivity::new(
                         self.data.do_blender,
@@ -92,7 +113,7 @@ impl Wizard {
                             }
                         }
                         ActivityResult::Prev => {
-                            self.state = WizardState::Intro;
+                            self.state = WizardState::DoScratchPath;
                         }
                         ActivityResult::Abort => {
                             return;
@@ -198,6 +219,7 @@ impl Wizard {
                         true,
                         true,
                         self.data.db_path.as_deref(),
+                        self.data.scratch_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
                         &self
@@ -235,6 +257,11 @@ impl Wizard {
                 "failed to execute wizardry :(",
                 &format!("error occuerd: {:?}", e),
             );
+            return;
         }
+        InfoDialog::show_in_center(
+            "The thread bundled by the laws of causality have now been bound.",
+            "The Wizard has Succeeded"
+        );
     }
 }

@@ -27,6 +27,7 @@ impl SummaryActivity {
         show_config_part: bool,
         show_tools_part: bool,
         db_path: Option<&Path>,
+        scratch_path: Option<&Path>,
         blender_vers: &[BlenderVersion],
         houdini_vers: &[HoudiniVersion],
         houdini_tools_paths: &[&Path],
@@ -49,7 +50,7 @@ impl SummaryActivity {
             text.push_str("</ul>");
             text
         } else {
-            "<br>No blender versions".to_owned()
+            "<h4>No blender versions</h4>".to_owned()
         };
 
         // houdini text
@@ -75,7 +76,7 @@ impl SummaryActivity {
             text.push_str("</ul>");
             text
         } else {
-            "<br>No Houdini versions".to_owned()
+            "<h4>No Houdini versions</h4>".to_owned()
         };
 
         let houdini_tools_text = if houdini_tools_paths.len() > 0 {
@@ -100,12 +101,19 @@ impl SummaryActivity {
             "\
             <h5>Note: existing config files will be overwritten!</h5>\
             \
-            <h3>Database location</h3>\
+            <h3>Database location:</h3>\
+            {}\n\
+            <h3>Shared Scratch location:</h3>\
             {}\n\
             {}\n\
             {}\n\
             ",
             if let Some(path) = db_path {
+                path.to_str().unwrap_or("<display error>")
+            } else {
+                "default location"
+            },
+            if let Some(path) = scratch_path {
                 path.to_str().unwrap_or("<display error>")
             } else {
                 "default location"
