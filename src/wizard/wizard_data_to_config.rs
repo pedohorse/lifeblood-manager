@@ -1,14 +1,17 @@
 use super::wizard_data::WizardData;
 pub use super::wizard_data::WizardDataSerialization;
-use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataCollection};
 use super::wizard_data_serde_common::{EnvAction, EnvConfig, Package, StringOrList};
+use crate::{config_data::ConfigWritingError, config_data_collection::ConfigDataCollection};
 use downloader::{Download, Downloader};
 use std::{
-    collections::HashMap, fs::{self, File}, io::{self, BufReader, Error}, iter::Map, path::Path, time::Duration
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, BufReader, Error},
+    path::Path,
+    time::Duration,
 };
 use tempfile::tempdir;
 use zip::ZipArchive;
-
 
 impl WizardDataSerialization for WizardData {
     fn write_configs(&self, config_root: &Path) -> Result<(), io::Error> {
@@ -23,10 +26,13 @@ impl WizardDataSerialization for WizardData {
             let mut conf = toml::Table::new();
             let mut conf_sched = toml::Table::new();
             let mut conf_globals = toml::Table::new();
-            conf_globals.insert("global_scratch_location".to_string(), toml::Value::String(path.to_string_lossy().to_string()));
+            conf_globals.insert(
+                "global_scratch_location".to_string(),
+                toml::Value::String(path.to_string_lossy().to_string()),
+            );
             conf_sched.insert("globals".to_string(), toml::Value::Table(conf_globals));
             conf.insert("scheduler".to_string(), toml::Value::Table(conf_sched));
-            
+
             let text = match toml::to_string_pretty(&conf) {
                 Ok(x) => x,
                 Err(_) => panic!("unexpected internal error!"),
@@ -36,6 +42,10 @@ impl WizardDataSerialization for WizardData {
                 Err(e) => return Err(Error::new(io::ErrorKind::Other, format!("{:?}", e))),
                 _ => (),
             }
+        } else {
+            // otherwise we should delete autocreated config files if any
+            let mut config_data = config_collection.get_config_data("scheduler");
+            config_data.remove_additional_config("00-autolbm-scratch-location")?;
         }
 
         let mut config = config_collection.get_config_data("standard_environment_resolver");
@@ -62,8 +72,10 @@ impl WizardDataSerialization for WizardData {
 
         let mut conf_packages = HashMap::new();
         for ver in self.houdini_versions.iter() {
-            let hou_package_name =
-                format!("houdini.py{}_{}", ver.python_version.0, ver.python_version.1);
+            let hou_package_name = format!(
+                "houdini.py{}_{}",
+                ver.python_version.0, ver.python_version.1
+            );
             if !conf_packages.contains_key(&hou_package_name) {
                 conf_packages.insert(hou_package_name.to_owned(), HashMap::new());
             }
