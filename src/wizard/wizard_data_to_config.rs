@@ -21,6 +21,7 @@ impl WizardDataSerialization for WizardData {
             panic!("DATABASE CONFIGURATION IS NOT YET IMPLEMENTED")
         }
 
+        let scratch_config_d_name = "00-autolbm-scratch-location";
         if let Some(path) = &self.scratch_path {
             let mut config_data = config_collection.get_config_data("scheduler");
             let mut conf = toml::Table::new();
@@ -43,7 +44,7 @@ impl WizardDataSerialization for WizardData {
                 # Any manual changes may be overwritten.\n\n\
                 ",
             );
-            match config_data.set_additional_config_text("00-autolbm-scratch-location", &text) {
+            match config_data.set_additional_config_text(scratch_config_d_name, &text) {
                 Err(ConfigWritingError::IoError(e)) => return Err(e),
                 Err(e) => return Err(Error::new(io::ErrorKind::Other, format!("{:?}", e))),
                 _ => (),
@@ -51,7 +52,7 @@ impl WizardDataSerialization for WizardData {
         } else {
             // otherwise we should delete autocreated config files if any
             let mut config_data = config_collection.get_config_data("scheduler");
-            config_data.remove_additional_config("00-autolbm-scratch-location")?;
+            config_data.remove_additional_config(scratch_config_d_name)?;
         }
 
         let mut config = config_collection.get_config_data("standard_environment_resolver");
