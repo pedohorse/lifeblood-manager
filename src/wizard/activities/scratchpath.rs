@@ -44,11 +44,11 @@ impl WizardActivityTrait for ScratchLocationPathActivity {
         icon.set_image(Some(PngImage::from_data(ICON_DATA).unwrap()));
         layout.fixed(&icon, 128);
         layout.end();
-        main_layout.fixed(&layout, 160);
+        main_layout.fixed(&layout, 230);
 
         let mut layout = Flex::default().row();
         let mut do_dbpath = CheckButton::default().with_label("override");
-        layout.fixed(&do_dbpath, 80);
+        layout.fixed(&do_dbpath, 100);
         let mut dbpath = FileInput::default();
         let mut browse_dbpath = Button::default().with_label("browse");
         layout.fixed(&browse_dbpath, 64);
