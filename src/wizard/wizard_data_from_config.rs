@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use toml::Table;
+
 use super::wizard_data::{BlenderVersion, HoudiniVersion, WizardData};
 use super::wizard_data_serde_common::{EnvConfig, StringOrList};
 use crate::config_data::ConfigLoadError;
@@ -27,6 +29,37 @@ impl WizardDataFromConfig for WizardData {
         };
 
         let mut wizard_data = WizardData::new();
+
+        let scheduler_config_data = config_collection.get_config_data("scheduler");
+        let scratch_config_d_name = "00-autolbm-scratch-location";
+        if let Some(text) = scheduler_config_data.additional_config_text(scratch_config_d_name) {
+            let config: Table = match toml::from_str(&text) {
+                Ok(c) => c,
+                Err(_) => {
+                    let mut err = ConfigLoadError::new();
+                    err.schema_error.push(
+                        if let Some(x) =
+                            scheduler_config_data.additional_config_path(scratch_config_d_name)
+                        {
+                            x.to_path_buf()
+                        } else {
+                            // this cannot happen since we already got config text
+                            unreachable!("should not happen");
+                        },
+                    );
+                    return Err(err);
+                }
+            };
+            if let Some(config_sched) = config.get("scheduler") {
+                if let Some(config_globals) = config_sched.get("globals") {
+                    if let Some(toml::Value::String(s)) =
+                        config_globals.get("global_scratch_location")
+                    {
+                        wizard_data.scratch_path = Some(PathBuf::from(s));
+                    }
+                }
+            }
+        }
 
         for (package_name, ver_to_package) in config.packages.iter() {
             macro_rules! parse_or_skip {
@@ -76,7 +109,11 @@ impl WizardDataFromConfig for WizardData {
             }
 
             if package_name.starts_with("houdini.py") || package_name.starts_with("houdini.") {
-                let pname_offset = if package_name.starts_with("houdini.py") { 10 } else { 8 };
+                let pname_offset = if package_name.starts_with("houdini.py") {
+                    10
+                } else {
+                    8
+                };
                 let pyver_parts: Vec<&str> = package_name[pname_offset..].split('_').collect();
                 if pyver_parts.len() != 2 {
                     continue;
