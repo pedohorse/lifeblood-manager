@@ -62,6 +62,7 @@ impl WizardForToolsOnly {
                         false,
                         true,
                         self.data.db_path.as_deref(),
+                        self.data.scratch_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
                         &self
