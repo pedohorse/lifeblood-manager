@@ -219,6 +219,7 @@ impl Wizard {
                         true,
                         true,
                         self.data.db_path.as_deref(),
+                        self.data.scratch_path.as_deref(),
                         &self.data.blender_versions,
                         &self.data.houdini_versions,
                         &self
@@ -256,6 +257,11 @@ impl Wizard {
                 "failed to execute wizardry :(",
                 &format!("error occuerd: {:?}", e),
             );
+            return;
         }
+        InfoDialog::show_in_center(
+            "The thread bundled by the laws of causality have now been bound.",
+            "The Wizard has Succeeded"
+        );
     }
 }
