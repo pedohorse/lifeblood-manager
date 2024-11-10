@@ -43,7 +43,7 @@ impl<'a> ActivityWidget<'a> {
             let result = self.result.clone();
             let mut wind = wind.clone();
             Button::default()
-                .with_label("< back")
+                .with_label("@< back")
                 .set_callback(move |_| {
                     *result.borrow_mut() = Some(ActivityResult::Prev);
                     wind.hide();
@@ -53,7 +53,7 @@ impl<'a> ActivityWidget<'a> {
         Frame::default();
         Frame::default();
         
-        Button::default().with_label("next >").set_callback({
+        Button::default().with_label("next @>").set_callback({
             let result = self.result.clone();
 
             move |_| {
