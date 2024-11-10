@@ -27,6 +27,7 @@ enum WizardState {
     FindBlender,
     FindHoudini,
     HoudiniTools,
+    GPUDevices,
     Finalize,
 }
 
@@ -203,10 +204,32 @@ impl Wizard {
                             if let Some(tools_paths) = activity.get_tools_install_locations() {
                                 self.data.houdini_plugins_installation_paths = tools_paths;
                             }
-                            self.state = WizardState::Finalize;
+                            self.state = WizardState::GPUDevices;
                         }
                         ActivityResult::Prev => {
                             self.state = WizardState::FindHoudini;
+                        }
+                        ActivityResult::Abort => {
+                            return;
+                        }
+                    }
+                }
+                WizardState::GPUDevices => {
+                    let mut activity = activities::gpudevices::GpuDevicesActivity::new(
+                        &Vec::new(),
+                    );
+                    match runner.process(&mut activity) {
+                        ActivityResult::Next => {
+                            self.state = WizardState::Finalize;
+                        }
+                        ActivityResult::Prev => {
+                            if self.data.do_houdini {
+                                self.state = WizardState::HoudiniTools;
+                            } else if self.data.do_blender {
+                                self.state = WizardState::FindBlender;
+                            } else {
+                                self.state = WizardState::ChooseDCCs;
+                            }
                         }
                         ActivityResult::Abort => {
                             return;
@@ -234,13 +257,7 @@ impl Wizard {
                             break;
                         }
                         ActivityResult::Prev => {
-                            if self.data.do_houdini {
-                                self.state = WizardState::HoudiniTools;
-                            } else if self.data.do_blender {
-                                self.state = WizardState::FindBlender;
-                            } else {
-                                self.state = WizardState::ChooseDCCs;
-                            }
+                            self.state = WizardState::GPUDevices;
                         }
                         ActivityResult::Abort => {
                             return;
