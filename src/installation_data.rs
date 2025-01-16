@@ -1347,15 +1347,30 @@ impl InstallationsData {
             "include-system-site-packages = false",
         )?;
         // write special _pth file
-        let mut py_pth_file = fs::OpenOptions::new()
-            .write(true)
-            .append(true)
-            .open(venv_bin_path.join(format!("python{}._pth", pycode)))?;
-        writeln!(
-            py_pth_file,
-            "import site\n\
-             ..\\.."
-        )?;
+        {
+            let mut py_pth_file = fs::OpenOptions::new()
+                .write(true)
+                .append(true)
+                .open(venv_bin_path.join(format!("python{}._pth", pycode)))?;
+            writeln!(
+                py_pth_file,
+                "import site\n\
+                ..\\.."
+            )?;
+        }
+        // embedded python does NOT read PYTHONPATH by default, we have to implement this ourselves
+        {
+            let mut sitecustomize_file = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(venv_bin_path.join("sitecustomize.py"))?;
+            writeln!(
+                sitecustomize_file,
+                "import sys\n\
+                import os\n\
+                sys.path = [x for x in os.environ.get('PYTHONPATH', '').split(os.pathsep) if x] + sys.path"
+            )?;
+        }
 
         // now run get-pip.py script
         let exit_status = match process::Command::new(venv_bin_path.join("python"))
