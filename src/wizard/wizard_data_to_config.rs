@@ -150,7 +150,7 @@ impl WizardDataSerialization for WizardData {
         }
 
         //
-        // config devices
+        // save config devices
         let device_config_d_name = "10-autolbm-gpu-devices";
         if self.gpu_devs.len() > 0 {
             let mut gpus = HashMap::new();
@@ -183,6 +183,9 @@ impl WizardDataSerialization for WizardData {
                 },
                 Err(_) => panic!("unexpected internal error!"),
             }
+        } else {
+            let mut worker_config = config_collection.get_config_data("worker");
+            worker_config.remove_additional_config(device_config_d_name)?;
         } // config devices
 
         Ok(())
