@@ -110,7 +110,7 @@ impl Wizard {
                             } else if self.data.do_houdini {
                                 self.state = WizardState::FindHoudini;
                             } else {
-                                self.state = WizardState::Finalize;
+                                self.state = WizardState::GPUDevices;
                             }
                         }
                         ActivityResult::Prev => {
@@ -143,7 +143,7 @@ impl Wizard {
                             if self.data.do_houdini {
                                 self.state = WizardState::FindHoudini;
                             } else {
-                                self.state = WizardState::Finalize;
+                                self.state = WizardState::GPUDevices;
                             }
                         }
                         ActivityResult::Prev => {
@@ -216,10 +216,12 @@ impl Wizard {
                 }
                 WizardState::GPUDevices => {
                     let mut activity = activities::gpudevices::GpuDevicesActivity::new(
-                        &Vec::new(),
+                        &self.data.gpu_devs,
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
+                            let devs = activity.get_gpu_devices();
+                            self.data.gpu_devs = devs;
                             self.state = WizardState::Finalize;
                         }
                         ActivityResult::Prev => {
@@ -251,6 +253,7 @@ impl Wizard {
                             .iter()
                             .map(|x| x as &Path)
                             .collect::<Vec<_>>(),
+                        &self.data.gpu_devs,
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {

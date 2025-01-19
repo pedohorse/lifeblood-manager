@@ -26,6 +26,33 @@ pub struct EnvAction {
     pub set: Option<String>,
 }
 
+//
+// worker device related things
+//
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkerDevicesOnlyConfig {
+    pub devices: StandardWorkerGpuDevices,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StandardWorkerGpuDevices { // we use this instead of arbitrary device type map as we don't support that yet
+    pub gpu: HashMap<String, StandardWorkerGpuDevice>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StandardWorkerGpuDevice {
+    pub resources: StandardWorkerGpuDeviceResources,
+    pub tags: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StandardWorkerGpuDeviceResources {
+    pub mem: Option<String>,
+    pub opencl_ver: Option<f64>,
+    pub cuda_cc: Option<f64>,
+}
+
 #[test]
 fn basic() {
     let conf_text = "\

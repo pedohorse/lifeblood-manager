@@ -1,14 +1,10 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use super::super::wizard_activity::WizardActivityTrait;
 use crate::theme::ITEM_HEIGHT;
-use fltk::button::Button;
-use fltk::dialog::NativeFileChooser;
 use fltk::enums::Align;
-use fltk::group::{Flex, Scroll};
+use fltk::group::Flex;
 use fltk::image::PngImage;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::misc::Spinner;
@@ -26,17 +22,17 @@ pub struct GpuDevicesActivity {
                     IntInput,                  // mem GB
                     FloatInput,                // OpenCL version
                     FloatInput,                // CUDA CC
+                    Spinner,                   // tag count spinner
                     Vec<(Flex, Input, Input)>, // tags
                 )>,
             >,
         >,
     >,
-    init_data: Vec<(u32, f64, f64, Vec<(String, String)>)>,
+    init_data: Vec<(String, u32, f64, f64, Vec<(String, String)>)>,
 }
 
 impl WizardActivityTrait for GpuDevicesActivity {
     fn start_activity(&mut self) {
-        
         let mut main_layout = Flex::default().column();
         let mut layout = Flex::default().row();
         let mut icon = Frame::default();
@@ -46,11 +42,43 @@ impl WizardActivityTrait for GpuDevicesActivity {
             .with_align(Align::Inside | Align::Left)
             .with_label(
                 "\
-                TBD\n\
-                ",
+                Set up GPU devices for this machine.\n\
+                It is really hard to autodetect GPU parameters for different platforms, vendors and operating systems,\n\
+                therefore I'd really appreciate if you can fill this information in yourself.\n\
+                \n\
+                The Name can be anything - name is for you to recognize the device later\n\
+                Supported OpenCL version and CUDA Compute Capability - those should be specified in your GPU's\n\
+                technical specification list, you can either google it, or use a tool (such as GPUZ)
+                "
             );
         layout.end();
         main_layout.fixed(&layout, 128);
+        main_layout.fixed(&Frame::default()
+            .with_align(Align::Inside | Align::Left)
+            .with_label("\
+You will be able to use these resources to filter GPUs you want to calculate on
+
+Now for the tags - tags are very special
+Tags - is something different DCC nodes may use to distinguish one GPU from another.
+The problem is - Redshift, Houdini, Karma... - they all use DIFFERENT ways of enumerating GPUs, which makes it very inconvenient 
+to target them.
+Tags exist to solve this problem.
+For example, here are some known tags currently used by Lifeblood nodes:
+
+houdini_ocl - this tag must consist of device type, vendor name and number,
+    as recognized by houdini's env variables HOUDINI_OCL_DEVICETYPE, HOUDINI_OCL_VENDOR and HOUDINI_OCL_DEVICENUMBER
+    respectivelly. An example value would be GPU:Intel(R) Corporation:0
+    Or some parts may be omitted if there is no ambiguity. like if you have just one intel card - you can just specify 
+    GPU:Intel(R) Corporation:
+    Or if you have only 2 nvidia cards, you can specify GPU::0 for first one and GPU::1 for the second
+    BUT it is up to you to determine which one is actually 0, and which is 1 as seen by houdi
+
+karma_dev - this tag must have form of <card number>/<number of cards>
+    For example, if you have 2 Nvidia cards - one of them will have tag value 0/2  and second one - 1/2
+    For a single gpu - the value will most probably be just 0/1
+    This value represents the Optix device number as seen by Karma"
+            )
+        , 410);
 
         const MAX_GPUS_COUNT: usize = 8;
         const MAX_GPU_TAGS: usize = 16;
@@ -144,23 +172,53 @@ impl WizardActivityTrait for GpuDevicesActivity {
                 move |w| {
                     let number_of_tags = w.value() as usize;
                     for i in 0..number_of_tags {
-                        widgets.borrow_mut()[gpu_i].5[i].0.show();
+                        widgets.borrow_mut()[gpu_i].6[i].0.show();
                     }
                     for i in number_of_tags..MAX_GPU_TAGS {
-                        widgets.borrow_mut()[gpu_i].5[i].0.hide();
+                        widgets.borrow_mut()[gpu_i].6[i].0.hide();
                     }
                     block_layout.layout();
                     main_layout.layout();
                 }
             });
 
-            user_inputs.push((block_layout, gpu_name, mem_size, opencl_ver, cuda_ver, gpu_tags));
+            user_inputs.push((
+                block_layout,
+                gpu_name,
+                mem_size,
+                opencl_ver,
+                cuda_ver,
+                tags_number_spinner,
+                gpu_tags,
+            ));
         }
         main_layout.end();
 
         // init
-        //TBD
-        self.widgets.as_ref().unwrap().borrow_mut().append(&mut user_inputs);
+        version_number_spinner.set_value(self.init_data.len().min(MAX_GPUS_COUNT) as f64);
+        for (init_data, user_input) in self.init_data.iter().zip(user_inputs.iter_mut()) {
+            user_input.0.show();
+            user_input.1.set_value(&init_data.0);
+            user_input.2.set_value(&format!("{}", init_data.1));
+            user_input.3.set_value(&format!("{}", init_data.2));
+            user_input.4.set_value(&format!("{}", init_data.3));
+
+            user_input
+                .5
+                .set_value(init_data.4.len().min(MAX_GPU_TAGS) as f64);
+            for ((tag, val), tag_widgets) in init_data.4.iter().zip(user_input.6.iter_mut()) {
+                tag_widgets.0.show();
+                tag_widgets.1.set_value(tag);
+                tag_widgets.2.set_value(val);
+            }
+        }
+        self.widgets
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .append(&mut user_inputs);
+
+        main_layout.layout();
 
         // callbacks
         version_number_spinner.set_callback({
@@ -175,20 +233,21 @@ impl WizardActivityTrait for GpuDevicesActivity {
                 }
                 main_layout.layout();
             }
-        })
+        });
     }
 
     fn contents_size(&self) -> (i32, i32) {
-        (800, 1024)
+        (900, 1024)
     }
 
     fn validate(&self) -> Result<(), &str> {
-        panic!("TBD");
+        //panic!("TBD");
+        Ok(())
     }
 }
 
 impl GpuDevicesActivity {
-    pub fn new(init_data: &Vec<(u32, f64, f64, Vec<(String, String)>)>) -> Self {
+    pub fn new(init_data: &Vec<(String, u32, f64, f64, Vec<(String, String)>)>) -> Self {
         GpuDevicesActivity {
             widgets: None,
             init_data: init_data.clone(),
@@ -198,7 +257,9 @@ impl GpuDevicesActivity {
     pub fn get_gpu_devices(&self) -> Vec<(String, u32, f64, f64, Vec<(String, String)>)> {
         if let Some(widgets) = &self.widgets {
             let mut ret = Vec::new();
-            for (layout, name_input, mem_input, ocl_input, cuda_input, tags_inputs) in widgets.borrow().iter() {
+            for (layout, name_input, mem_input, ocl_input, cuda_input, _, tags_inputs) in
+                widgets.borrow().iter()
+            {
                 if !layout.visible() {
                     break;
                 }
@@ -213,7 +274,7 @@ impl GpuDevicesActivity {
                 ret.push((
                     name_input.value(),
                     u32::from_str_radix(&mem_input.value(), 10).unwrap(),
-                    ocl_input.value().parse().unwrap(),  // no error check as input is not supposed to be able to return invalid floats
+                    ocl_input.value().parse().unwrap(), // no error check as input is not supposed to be able to return invalid floats
                     cuda_input.value().parse().unwrap(),
                     tags,
                 ));

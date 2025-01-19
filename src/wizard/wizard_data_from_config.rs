@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use toml::Table;
+use toml::{Table, Value};
 
 use super::wizard_data::{BlenderVersion, HoudiniVersion, WizardData};
-use super::wizard_data_serde_common::{EnvConfig, StringOrList};
+use super::wizard_data_serde_common::{EnvConfig, StringOrList, WorkerDevicesOnlyConfig};
 use crate::config_data::ConfigLoadError;
 use crate::config_data_collection::ConfigDataCollection;
 
@@ -16,14 +16,17 @@ impl WizardDataFromConfig for WizardData {
         let config_collection = ConfigDataCollection::new(config_root);
         let config = config_collection.get_config_data("standard_environment_resolver");
 
+        // all syntax errors will be caught here
         config.validate()?;
 
         let config: EnvConfig = match toml::from_str(&config.main_config_text()) {
             Ok(c) => c,
-            Err(_) => {
+            Err(e) => {
                 let mut err = ConfigLoadError::new();
-                err.schema_error
-                    .push(config.main_config_path().to_path_buf());
+                err.schema_error.push((
+                    config.main_config_path().to_path_buf(),
+                    (e.message().to_owned(), e.span()),
+                ));
                 return Err(err);
             }
         };
@@ -31,22 +34,23 @@ impl WizardDataFromConfig for WizardData {
         let mut wizard_data = WizardData::new();
 
         let scheduler_config_data = config_collection.get_config_data("scheduler");
+        let worker_config_data = config_collection.get_config_data("worker");
+        //
+        // get autogen scratch location config
         let scratch_config_d_name = "00-autolbm-scratch-location";
         if let Some(text) = scheduler_config_data.additional_config_text(scratch_config_d_name) {
             let config: Table = match toml::from_str(&text) {
                 Ok(c) => c,
-                Err(_) => {
+                Err(e) => {
                     let mut err = ConfigLoadError::new();
-                    err.schema_error.push(
-                        if let Some(x) =
-                            scheduler_config_data.additional_config_path(scratch_config_d_name)
-                        {
-                            x.to_path_buf()
-                        } else {
-                            // this cannot happen since we already got config text
-                            unreachable!("should not happen");
-                        },
-                    );
+                    // TODO: this can be syntax error!
+                    err.schema_error.push((
+                        scheduler_config_data
+                            .additional_config_path(scratch_config_d_name)
+                            .unwrap()
+                            .to_owned(),
+                        (e.message().to_owned(), e.span()),
+                    ));
                     return Err(err);
                 }
             };
@@ -60,7 +64,51 @@ impl WizardDataFromConfig for WizardData {
                 }
             }
         }
+        //
+        // get autogen config devices
+        let device_config_d_name = "10-autolbm-gpu-devices";
+        if let Some(text) = worker_config_data.additional_config_text(&device_config_d_name) {
+            let dev_config_data: WorkerDevicesOnlyConfig = match toml::from_str(&text) {
+                Ok(c) => c,
+                Err(e) => {
+                    // since we checked for syntax error before (with validate()) - this can only be a schema error
+                    let mut err = ConfigLoadError::new();
+                    err.schema_error.push((
+                        worker_config_data
+                            .additional_config_path(&device_config_d_name)
+                            .unwrap()
+                            .to_owned(),
+                        (e.message().to_owned(), e.span()),
+                    ));
+                    return Err(err);
+                }
+            };
+            // now fill wizard data with it
+            for (gpu_name, gpu_data) in dev_config_data.devices.gpu.into_iter() {
+                wizard_data.gpu_devs.push((
+                    gpu_name,
+                    {
+                        let text = gpu_data.resources.mem.unwrap_or_default();
+                        u32::from_str_radix(
+                            if text.ends_with("G") {
+                                // we expect G suffix that we will trim
+                                &text[0..text.len() - 1]
+                            } else {
+                                "0" // TODO: currently we don't know how to treat anything other than "G" suffix
+                            },
+                            10,
+                        )
+                        .unwrap_or(0)
+                    },
+                    gpu_data.resources.opencl_ver.unwrap_or(0.0),
+                    gpu_data.resources.cuda_cc.unwrap_or(0.0),
+                    gpu_data.tags.into_iter().collect(),
+                ))
+            }
+        };
 
+        //
+        // packages
         for (package_name, ver_to_package) in config.packages.iter() {
             macro_rules! parse_or_skip {
                 ($foo:expr) => {
