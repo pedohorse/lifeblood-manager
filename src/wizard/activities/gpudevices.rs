@@ -241,7 +241,41 @@ karma_dev - this tag must have form of <card number>/<number of cards>
     }
 
     fn validate(&self) -> Result<(), &str> {
-        //panic!("TBD");
+        if let Some(widgets) = &self.widgets {
+            for (layout, name_input, mem_input, ocl_input, cuda_input, _, tags_inputs) in widgets.borrow().iter() {
+                if !layout.visible() {
+                    break;
+                }
+                if name_input.value().trim().len() == 0 {
+                    return Err("gpu name cannot be empty");
+                }
+                match i64::from_str_radix(&mem_input.value(), 10) {
+                    Err(_) => return Err("failed to parse memory"),
+                    Ok(x) if x < 0 => return Err("memory cannot be negative"),
+                    Ok(_) => (),
+                }
+                match ocl_input.value().parse::<f64>() {
+                    Err(_) => return Err("failed to parse OCL version"),
+                    Ok(x) if x < 0_f64 => return Err("OCL version cannot be negative"),
+                    Ok(_) => (),
+                }
+                match cuda_input.value().parse::<f64>() {
+                    Err(_) => return Err("failed to parse CUDA CC"),
+                    Ok(x) if x < 0_f64 => return Err("CUDA CC cannot be negative"),
+                    Ok(_) => (),
+                }
+                for (tag_layout, tag_name, _)  in tags_inputs.iter() {
+                    if !tag_layout.visible() {
+                        break;
+                    }
+                    if tag_name.value().trim().len() == 0 {
+                        return Err("tag name cannot be empty");
+                    }
+                    // tag value can be empty, i guess, why not...
+                }
+            }
+        }
+
         Ok(())
     }
 }
