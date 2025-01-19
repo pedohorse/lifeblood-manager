@@ -55,7 +55,7 @@ pub enum ConfigWritingError {
 pub struct ConfigLoadError {
     pub access_error: Vec<PathBuf>,
     pub syntax_error: Vec<(PathBuf, (String, Option<std::ops::Range<usize>>))>,
-    pub schema_error: Vec<PathBuf>,
+    pub schema_error: Vec<(PathBuf, (String, Option<std::ops::Range<usize>>))>,
 }
 
 impl ConfigLoadError {

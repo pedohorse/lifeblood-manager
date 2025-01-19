@@ -71,6 +71,7 @@ impl WizardForToolsOnly {
                             .iter()
                             .map(|x| x as &Path)
                             .collect::<Vec<_>>(),
+                            &[],
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {

@@ -20,6 +20,7 @@ pub struct WizardData {
     pub blender_versions: Vec<BlenderVersion>,
     pub houdini_plugins_paths_first_initialized: bool,
     pub houdini_plugins_installation_paths: Vec<PathBuf>,
+    pub gpu_devs: Vec<(String, u32, f64, f64, Vec<(String, String)>)>,
 }
 
 pub trait WizardDataSerialization {
@@ -44,6 +45,7 @@ impl WizardData {
             blender_versions: Vec::new(),
             houdini_plugins_paths_first_initialized: false,
             houdini_plugins_installation_paths: Vec::new(),
+            gpu_devs: Vec::new(),
         }
     }
 }

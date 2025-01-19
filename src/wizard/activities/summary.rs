@@ -31,6 +31,7 @@ impl SummaryActivity {
         blender_vers: &[BlenderVersion],
         houdini_vers: &[HoudiniVersion],
         houdini_tools_paths: &[&Path],
+        gpu_devices: &[(String, u32, f64, f64, Vec<(String, String)>)],
     ) -> Self {
         // blender text
         let blender_ver_text = if blender_vers.len() > 0 {
@@ -95,6 +96,30 @@ impl SummaryActivity {
             "<br>No Lifeblood submitting tools for Houdini will be installed".to_owned()
         };
 
+        // gpu devices
+        let gpu_summary = if gpu_devices.len() > 0 {
+            let mut text = format!(
+                "\
+                <h3>GPU devices</h3>\
+                <ul>
+                ",
+            );
+            for (dev_name, dev_mem, ocl, cuda, tags) in gpu_devices.iter() {
+                text.push_str(&format!("<li>{dev_name} ({dev_mem}GB): ocl:{ocl}, cuda:{cuda}"));
+                if tags.len() > 0 {
+                    text.push_str("<ul>");
+                    for (tag_name, tag_val) in tags.iter() {
+                        text.push_str(&format!("<li>{tag_name}={tag_val}"));
+                    }
+                    text.push_str("</ul>");
+                }
+            }
+            text.push_str("</ul>");
+            text
+        } else {
+            format!("<h3>No GPU devices</h3>")
+        };
+
         //
 
         let config_summary = format!(
@@ -104,6 +129,7 @@ impl SummaryActivity {
             <h3>Database location:</h3>\
             {}\n\
             <h3>Shared Scratch location:</h3>\
+            {}\n\
             {}\n\
             {}\n\
             {}\n\
@@ -120,8 +146,10 @@ impl SummaryActivity {
             },
             blender_ver_text,
             houini_ver_text,
+            gpu_summary,
         );
 
+        // tools summary text
         let tools_summary = format!(
             "\
             <h3>Tools:</h3>\
