@@ -75,31 +75,43 @@ impl WizardDataSerialization for WizardData {
         //
         // software packages
 
+        let mut conf_packages = HashMap::new();
+
+        macro_rules! process_simple_package {
+            ($dcc_versions:expr, $pname:literal, $plabel:literal) => {
+                {
+                    let mut conf_dcc_vers = HashMap::new();
+                    for ver in $dcc_versions.iter() {
+                        conf_dcc_vers.insert(
+                            format!("{}.{}.{}", ver.version.0, ver.version.1, ver.version.2),
+                            Package {
+                                label: Some($plabel.to_owned()),
+                                env: Some(HashMap::from([(
+                                    "PATH".to_owned(),
+                                    EnvAction {
+                                        append: None,
+                                        prepend: Some(StringOrList::String(
+                                            ver.bin_path.to_string_lossy().to_string(),
+                                        )),
+                                        set: None,
+                                    },
+                                )])),
+                            },
+                        );
+                    } 
+                    if conf_dcc_vers.len() > 0 {
+                        conf_packages.insert($pname.to_owned(), conf_dcc_vers);
+                    };
+                }
+            };
+        }
+
         //
-        // blender
-        let mut conf_blender_vers = HashMap::new();
-        for ver in self.blender_versions.iter() {
-            conf_blender_vers.insert(
-                format!("{}.{}.{}", ver.version.0, ver.version.1, ver.version.2),
-                Package {
-                    label: Some("Blender".to_owned()),
-                    env: Some(HashMap::from([(
-                        "PATH".to_owned(),
-                        EnvAction {
-                            append: None,
-                            prepend: Some(StringOrList::String(
-                                ver.bin_path.to_string_lossy().to_string(),
-                            )),
-                            set: None,
-                        },
-                    )])),
-                },
-            );
-        } // blender
+        process_simple_package!(self.blender_versions, "blender", "Blender");
+        process_simple_package!(self.redshift_versions, "redshift", "Redshift");
 
         //
         // houdini
-        let mut conf_packages = HashMap::new();
         for ver in self.houdini_versions.iter() {
             let hou_package_name = format!(
                 "houdini.py{}_{}",
@@ -128,9 +140,6 @@ impl WizardDataSerialization for WizardData {
                     )])),
                 },
             );
-        }
-        if conf_blender_vers.len() > 0 {
-            conf_packages.insert("blender".to_owned(), conf_blender_vers);
         } // houdini
 
         //

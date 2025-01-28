@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use toml::{Table, Value};
+use toml::Table;
 
 use super::wizard_data::{BlenderVersion, HoudiniVersion, WizardData};
 use super::wizard_data_serde_common::{EnvConfig, StringOrList, WorkerDevicesOnlyConfig};
 use crate::config_data::ConfigLoadError;
 use crate::config_data_collection::ConfigDataCollection;
+use crate::wizard::wizard_data::RedshiftVersion;
 
 pub trait WizardDataFromConfig {
     fn new_from_config(config_root: &Path) -> Result<WizardData, ConfigLoadError>;
@@ -156,58 +157,85 @@ impl WizardDataFromConfig for WizardData {
                 }};
             }
 
-            if package_name.starts_with("houdini.py") || package_name.starts_with("houdini.") {
-                let pname_offset = if package_name.starts_with("houdini.py") {
-                    10
-                } else {
-                    8
-                };
-                let pyver_parts: Vec<&str> = package_name[pname_offset..].split('_').collect();
-                if pyver_parts.len() != 2 {
-                    continue;
-                }
-
-                let py_major: u32 = parse_or_skip!(pyver_parts[0]);
-                let py_minor: u32 = parse_or_skip!(pyver_parts[1]);
-
-                for (ver, package) in ver_to_package.iter() {
-                    let bin_path = get_bin_path!(package);
-
-                    let ver_parts: Vec<&str> = ver.split('.').collect();
-                    if ver_parts.len() != 3 {
+            match package_name.as_str() {
+                x if x.starts_with("houdini.py") || x.starts_with("houdini.") => {
+                    let pname_offset = if package_name.starts_with("houdini.py") {
+                        10
+                    } else {
+                        8
+                    };
+                    let pyver_parts: Vec<&str> = package_name[pname_offset..].split('_').collect();
+                    if pyver_parts.len() != 2 {
                         continue;
                     }
-                    wizard_data.houdini_versions.push(HoudiniVersion {
-                        bin_path,
-                        python_version: (py_major, py_minor),
-                        version: (
-                            parse_or_skip!(ver_parts[0]),
-                            parse_or_skip!(ver_parts[1]),
-                            parse_or_skip!(ver_parts[2]),
-                        ),
-                    });
-                }
-            } else if package_name == "blender" {
-                for (ver, package) in ver_to_package.iter() {
-                    let bin_path = get_bin_path!(package);
-
-                    let ver_parts: Vec<&str> = ver.split('.').collect();
-                    if ver_parts.len() != 3 {
-                        continue;
+    
+                    let py_major: u32 = parse_or_skip!(pyver_parts[0]);
+                    let py_minor: u32 = parse_or_skip!(pyver_parts[1]);
+    
+                    for (ver, package) in ver_to_package.iter() {
+                        let bin_path = get_bin_path!(package);
+    
+                        let ver_parts: Vec<&str> = ver.split('.').collect();
+                        if ver_parts.len() != 3 {
+                            continue;
+                        }
+                        wizard_data.houdini_versions.push(HoudiniVersion {
+                            bin_path,
+                            python_version: (py_major, py_minor),
+                            version: (
+                                parse_or_skip!(ver_parts[0]),
+                                parse_or_skip!(ver_parts[1]),
+                                parse_or_skip!(ver_parts[2]),
+                            ),
+                        });
                     }
-                    wizard_data.blender_versions.push(BlenderVersion {
-                        bin_path,
-                        version: (
-                            parse_or_skip!(ver_parts[0]),
-                            parse_or_skip!(ver_parts[1]),
-                            parse_or_skip!(ver_parts[2]),
-                        ),
-                    });
+                }
+                "blender" => {
+                    for (ver, package) in ver_to_package.iter() {
+                        let bin_path = get_bin_path!(package);
+    
+                        let ver_parts: Vec<&str> = ver.split('.').collect();
+                        if ver_parts.len() != 3 {
+                            continue;
+                        }
+                        wizard_data.blender_versions.push(BlenderVersion {
+                            bin_path,
+                            version: (
+                                parse_or_skip!(ver_parts[0]),
+                                parse_or_skip!(ver_parts[1]),
+                                parse_or_skip!(ver_parts[2]),
+                            ),
+                        });
+                    }
+                }
+                "redshift" => {
+                    // NOTE: same shit as in blender
+                    for (ver, package) in ver_to_package.iter() {
+                        let bin_path = get_bin_path!(package);
+    
+                        let ver_parts: Vec<&str> = ver.split('.').collect();
+                        if ver_parts.len() != 3 {
+                            continue;
+                        }
+                        wizard_data.redshift_versions.push(RedshiftVersion {
+                            bin_path,
+                            version: (
+                                parse_or_skip!(ver_parts[0]),
+                                parse_or_skip!(ver_parts[1]),
+                                parse_or_skip!(ver_parts[2]),
+                            ),
+                        });
+                    }
+                }
+                s => {
+                    eprintln!("unknown package type {s} is skipped and ignored");
+                    // TODO: we should at least keep those packages
                 }
             }
         }
         wizard_data.do_houdini = wizard_data.houdini_versions.len() > 0;
         wizard_data.do_blender = wizard_data.blender_versions.len() > 0;
+        wizard_data.do_redshift = wizard_data.redshift_versions.len() > 0;
 
         Ok(wizard_data)
     }
