@@ -106,6 +106,13 @@ impl WizardDataFromConfig for WizardData {
                     gpu_data.tags.into_iter().collect(),
                 ))
             }
+        } else {
+            // set some usual defaults
+            wizard_data.gpu_devs.push(("".to_owned(), 0, 3.0, 7.0, vec![
+                ("houdini_ocl".to_owned(), "GPU::0".to_owned()),
+                ("karma_dev".to_owned(), "0/1".to_owned()),
+                ("redshift_dev".to_owned(), "0".to_owned()),
+            ]));
         };
 
         //
