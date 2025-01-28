@@ -4,7 +4,7 @@ use std::rc::Rc;
 use super::super::wizard_activity::WizardActivityTrait;
 use crate::theme::ITEM_HEIGHT;
 use fltk::enums::Align;
-use fltk::group::Flex;
+use fltk::group::{Flex, Scroll, ScrollType};
 use fltk::image::PngImage;
 use fltk::input::{FloatInput, Input, IntInput};
 use fltk::misc::Spinner;
@@ -53,32 +53,36 @@ impl WizardActivityTrait for GpuDevicesActivity {
             );
         layout.end();
         main_layout.fixed(&layout, 128);
-        main_layout.fixed(&Frame::default()
+        let scroll_group = Scroll::default().with_size(self.contents_size().0, 256).with_type(ScrollType::Vertical);
+        //let scroll_inner = Flex::default_fill().column();
+        Frame::default().with_size(self.contents_size().0, 500)
             .with_align(Align::Inside | Align::Left)
             .with_label("\
 You will be able to use these resources to filter GPUs you want to calculate on
 
-Now for the tags - tags are very special
+Now for the tags - tags are very special.
 Tags - is something different DCC nodes may use to distinguish one GPU from another.
-The problem is - Redshift, Houdini, Karma... - they all use DIFFERENT ways of enumerating GPUs, which makes it very inconvenient 
-to target them.
-Tags exist to solve this problem.
+The problem is - Redshift, Houdini, Karma... - they all use DIFFERENT ways of enumerating GPUs, which makes it
+very inconvenient to target them. Tags exist to solve this problem.
 For example, here are some known tags currently used by Lifeblood nodes:
 
-houdini_ocl - this tag must consist of device type, vendor name and number,
-    as recognized by houdini's env variables HOUDINI_OCL_DEVICETYPE, HOUDINI_OCL_VENDOR and HOUDINI_OCL_DEVICENUMBER
-    respectivelly. An example value would be GPU:Intel(R) Corporation:0
+houdini_ocl - this tag must consist of device type, vendor name and number, as recognized by houdini's env variables 
+    HOUDINI_OCL_DEVICETYPE, HOUDINI_OCL_VENDOR and HOUDINI_OCL_DEVICENUMBER respectivelly.
+    An example value would be GPU:Intel(R) Corporation:0
     Or some parts may be omitted if there is no ambiguity. like if you have just one intel card - you can just specify 
     GPU:Intel(R) Corporation:
     Or if you have only 2 nvidia cards, you can specify GPU::0 for first one and GPU::1 for the second
-    BUT it is up to you to determine which one is actually 0, and which is 1 as seen by houdi
+    BUT it is up to you to determine which one is actually 0, and which is 1 as seen by houdini
 
 karma_dev - this tag must have form of <card number>/<number of cards>
     For example, if you have 2 Nvidia cards - one of them will have tag value 0/2  and second one - 1/2
     For a single gpu - the value will most probably be just 0/1
-    This value represents the Optix device number as seen by Karma"
-            )
-        , 410);
+    This value represents the Optix device number as seen by Karma
+    
+redshift_dev - this tag represents the GPU's device number as recognized by Redshift"
+            );
+        //scroll_inner.end();
+        scroll_group.end();
 
         const MAX_GPUS_COUNT: usize = 8;
         const MAX_GPU_TAGS: usize = 16;
@@ -251,7 +255,7 @@ karma_dev - this tag must have form of <card number>/<number of cards>
                 }
                 match i64::from_str_radix(&mem_input.value(), 10) {
                     Err(_) => return Err("failed to parse memory"),
-                    Ok(x) if x < 0 => return Err("memory cannot be negative"),
+                    Ok(x) if x <= 0 => return Err("memory cannot be zero or negative"),
                     Ok(_) => (),
                 }
                 match ocl_input.value().parse::<f64>() {
