@@ -8,9 +8,9 @@ use fltk::{
 #[cfg(windows)]
 use lifeblood_manager::win_console_hack::{free_console, is_console};
 use lifeblood_manager::{
-    autostart, theme::*, tray_manager::TrayManager, InstallationWidget, InstallationsData,
-    LaunchWidget, MainWidgetConfig, StandardEnvResolverConfigWidget, Widget, WidgetCallbacks,
-    BUILD_INFO,
+    autostart, info_dialog::InfoDialog, theme::*, tray_manager::TrayManager, InstallationWidget,
+    InstallationsData, LaunchWidget, MainWidgetConfig, StandardEnvResolverConfigWidget, Widget,
+    WidgetCallbacks, BUILD_INFO,
 };
 use std::cell::RefCell;
 use std::env;
@@ -53,7 +53,11 @@ impl MainWidget {
         (browse_button, base_input)
     }
 
-    pub fn new(base_config_path: &Path, wind: &mut DoubleWindow, do_tray: bool) -> Arc<Mutex<Self>> {
+    pub fn new(
+        base_config_path: &Path,
+        wind: &mut DoubleWindow,
+        do_tray: bool,
+    ) -> Arc<Mutex<Self>> {
         let mut flex = Flex::default_fill().column();
         // one shared install location
         // base path input
@@ -316,8 +320,11 @@ impl MainWidget {
 
 fn main() {
     let current_exe = env::current_exe();
-    let current_dir = if let Ok(ref d) = current_exe {
-        d.parent().expect("failed to get dir of current executable")
+    let (current_exe, current_dir) = if let Ok(ref d) = current_exe {
+        (
+            d,
+            d.parent().expect("failed to get dir of current executable"),
+        )
     } else {
         panic!("failed to get current dir!");
     };
@@ -325,6 +332,36 @@ fn main() {
     #[cfg(windows)]
     if !is_console() {
         window::hide();
+    }
+
+    // check if another manager is already running
+    if let Some(exename) = current_exe.file_name() {
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing()
+                .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet)
+                .with_exe(sysinfo::UpdateKind::OnlyIfNotSet),
+        );
+        let mut count: u8 = 0;
+        for proc in sys.processes().values() {
+            if count >= 2 {
+                show_duplicate_process_error();
+                return;
+            }
+            if let Some(proc_exepath) = proc.exe() {
+                // skip linux non-main threads
+                if let Some(_) = proc.thread_kind() {
+                    continue;
+                }
+                if let Some(proc_exename) = proc_exepath.file_name() {
+                    if proc_exename == exename {
+                        count += 1;
+                    }
+                }
+            }
+        }
     }
 
     let mut do_tray = false;
@@ -378,4 +415,13 @@ fn main() {
     }
 
     app::delete_widget(wind); // deleting widgets delets lambdas holding arcs to self
+}
+
+fn show_duplicate_process_error() {
+    let app = app::App::default().with_scheme(app::Scheme::Gtk);
+    InfoDialog::show_in_center(
+        "start aborted",
+        "        There is already an instance of Lifeblood Manager running.        \nCheck in tray",
+    );
+    app.run().unwrap();
 }

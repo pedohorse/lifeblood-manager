@@ -42,4 +42,4 @@ pub use envres_config_widget::StandardEnvResolverConfigWidget;
 #[cfg(feature = "ui")]
 pub use widgets::{Widget, WidgetCallbacks};
 #[cfg(feature = "ui")]
-mod info_dialog;
+pub mod info_dialog;
