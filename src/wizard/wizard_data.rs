@@ -11,13 +11,20 @@ pub struct BlenderVersion {
     pub version: (u32, u32, u32),
 }
 
+pub struct RedshiftVersion {
+    pub bin_path: PathBuf,
+    pub version: (u32, u32, u32),
+}
+
 pub struct WizardData {
     pub db_path: Option<PathBuf>,
     pub scratch_path: Option<PathBuf>,
     pub do_houdini: bool,
     pub do_blender: bool,
+    pub do_redshift: bool,
     pub houdini_versions: Vec<HoudiniVersion>,
     pub blender_versions: Vec<BlenderVersion>,
+    pub redshift_versions: Vec<RedshiftVersion>,
     pub houdini_plugins_paths_first_initialized: bool,
     pub houdini_plugins_installation_paths: Vec<PathBuf>,
     pub gpu_devs: Vec<(String, u32, f64, f64, Vec<(String, String)>)>,
@@ -41,8 +48,10 @@ impl WizardData {
             scratch_path: None,
             do_houdini: false,
             do_blender: false,
+            do_redshift: false,
             houdini_versions: Vec::new(),
             blender_versions: Vec::new(),
+            redshift_versions: Vec::new(),
             houdini_plugins_paths_first_initialized: false,
             houdini_plugins_installation_paths: Vec::new(),
             gpu_devs: Vec::new(),

@@ -32,6 +32,7 @@ chrono = "0.4.31"
 toml = "0.8"
 home = "0.5"
 semver = "1.0"
+sysinfo = "0.33"
 serde = { version = "1.0", features = ["derive"] }
 auto-launch = { version = "0.5", optional=true }
 

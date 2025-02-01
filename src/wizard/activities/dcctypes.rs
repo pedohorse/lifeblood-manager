@@ -13,6 +13,7 @@ static ICON_DATA: &'static [u8] = include_bytes!("images/think_noBG.png");
 pub struct DCCTypesActivity {
     do_blender: Rc<Cell<bool>>,
     do_houdini: Rc<Cell<bool>>,
+    do_redshift: Rc<Cell<bool>>,
 }
 
 impl WizardActivityTrait for DCCTypesActivity {
@@ -25,7 +26,7 @@ impl WizardActivityTrait for DCCTypesActivity {
             .with_align(Align::Inside | Align::Left)
             .with_label(
                 "\
-        Being a wizard, I know how to set up some DCCs for Lifeblood\n\
+        Being a wizard, I know how to set up some DCCs and tools for Lifeblood\n\
         \n\
         Sellect which ones you would like to set up.\
         ",
@@ -39,6 +40,13 @@ impl WizardActivityTrait for DCCTypesActivity {
                 do_houdini.replace(w.value());
             }
         });
+        let mut do_redshift_checkbox = CheckButton::default().with_label("Redshift");
+        do_redshift_checkbox.set_callback({
+            let do_redshift = self.do_redshift.clone();
+            move |w| {
+                do_redshift.replace(w.value());
+            }
+        });
         let mut do_blender_checkbox = CheckButton::default().with_label("Blender");
         do_blender_checkbox.set_callback({
             let do_blender = self.do_blender.clone();
@@ -49,6 +57,7 @@ impl WizardActivityTrait for DCCTypesActivity {
 
         // init
         do_houdini_checkbox.set_value(self.do_houdini.get());
+        do_redshift_checkbox.set_value(self.do_redshift.get());
         do_blender_checkbox.set_value(self.do_blender.get());
     }
 
@@ -62,14 +71,15 @@ impl WizardActivityTrait for DCCTypesActivity {
 }
 
 impl DCCTypesActivity {
-    pub fn new(do_blender: bool, do_houdini: bool) -> Self {
+    pub fn new(do_blender: bool, do_houdini: bool, do_redshift: bool) -> Self {
         DCCTypesActivity {
             do_blender: Rc::new(Cell::new(do_blender)),
             do_houdini: Rc::new(Cell::new(do_houdini)),
+            do_redshift: Rc::new(Cell::new(do_redshift)),
         }
     }
 
-    pub fn selected_dccs(&self) -> (bool, bool) {
-        (self.do_blender.get(), self.do_houdini.get())
+    pub fn selected_dccs(&self) -> (bool, bool, bool) {
+        (self.do_blender.get(), self.do_houdini.get(), self.do_redshift.get())
     }
 }

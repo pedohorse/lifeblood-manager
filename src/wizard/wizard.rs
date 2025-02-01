@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::info_dialog::InfoDialog;
-use crate::wizard::wizard_data::{BlenderVersion, HoudiniVersion};
+use crate::wizard::wizard_data::{BlenderVersion, HoudiniVersion, RedshiftVersion};
 
 use super::houdini_utils::possible_default_user_pref_dirs;
 ///
@@ -26,6 +26,7 @@ enum WizardState {
     ChooseDCCs,
     FindBlender,
     FindHoudini,
+    FindRedshift,
     HoudiniTools,
     GPUDevices,
     Finalize,
@@ -101,14 +102,21 @@ impl Wizard {
                     let mut activity = activities::dcctypes::DCCTypesActivity::new(
                         self.data.do_blender,
                         self.data.do_houdini,
+                        self.data.do_redshift,
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
-                            (self.data.do_blender, self.data.do_houdini) = activity.selected_dccs();
+                            (
+                                self.data.do_blender,
+                                self.data.do_houdini,
+                                self.data.do_redshift,
+                            ) = activity.selected_dccs();
                             if self.data.do_blender {
                                 self.state = WizardState::FindBlender;
                             } else if self.data.do_houdini {
                                 self.state = WizardState::FindHoudini;
+                            } else if self.data.do_redshift {
+                                self.state = WizardState::FindRedshift;
                             } else {
                                 self.state = WizardState::GPUDevices;
                             }
@@ -142,6 +150,8 @@ impl Wizard {
                             }
                             if self.data.do_houdini {
                                 self.state = WizardState::FindHoudini;
+                            } else if self.data.do_redshift {
+                                self.state = WizardState::FindRedshift;
                             } else {
                                 self.state = WizardState::GPUDevices;
                             }
@@ -204,7 +214,11 @@ impl Wizard {
                             if let Some(tools_paths) = activity.get_tools_install_locations() {
                                 self.data.houdini_plugins_installation_paths = tools_paths;
                             }
-                            self.state = WizardState::GPUDevices;
+                            if self.data.do_redshift {
+                                self.state = WizardState::FindRedshift;
+                            } else {
+                                self.state = WizardState::GPUDevices;
+                            }
                         }
                         ActivityResult::Prev => {
                             self.state = WizardState::FindHoudini;
@@ -214,10 +228,44 @@ impl Wizard {
                         }
                     }
                 }
-                WizardState::GPUDevices => {
-                    let mut activity = activities::gpudevices::GpuDevicesActivity::new(
-                        &self.data.gpu_devs,
+                WizardState::FindRedshift => {
+                    let mut activity = activities::findredshift::FindRedshiftActivity::new(
+                        self.data
+                            .redshift_versions
+                            .iter()
+                            .map(|redshift| (redshift.bin_path.to_owned(), redshift.version))
+                            .collect(),
                     );
+                    match runner.process(&mut activity) {
+                        ActivityResult::Next => {
+                            if let Some(sel_vers) = activity.selected_versions() {
+                                self.data.redshift_versions.clear();
+                                for sel_ver in sel_vers.into_iter() {
+                                    self.data.redshift_versions.push(RedshiftVersion {
+                                        bin_path: sel_ver.0,
+                                        version: sel_ver.1,
+                                    });
+                                }
+                            }
+                            self.state = WizardState::GPUDevices;
+                        }
+                        ActivityResult::Prev => {
+                            if self.data.do_houdini {
+                                self.state = WizardState::HoudiniTools;
+                            } else if self.data.do_blender {
+                                self.state = WizardState::FindBlender;
+                            } else {
+                                self.state = WizardState::ChooseDCCs;
+                            }
+                        }
+                        ActivityResult::Abort => {
+                            return;
+                        }
+                    }
+                }
+                WizardState::GPUDevices => {
+                    let mut activity =
+                        activities::gpudevices::GpuDevicesActivity::new(&self.data.gpu_devs);
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {
                             let devs = activity.get_gpu_devices();
@@ -225,7 +273,9 @@ impl Wizard {
                             self.state = WizardState::Finalize;
                         }
                         ActivityResult::Prev => {
-                            if self.data.do_houdini {
+                            if self.data.do_redshift {
+                                self.state = WizardState::FindRedshift;
+                            } else if self.data.do_houdini {
                                 self.state = WizardState::HoudiniTools;
                             } else if self.data.do_blender {
                                 self.state = WizardState::FindBlender;
@@ -281,7 +331,7 @@ impl Wizard {
         }
         InfoDialog::show_in_center(
             "The thread bundled by the laws of causality have now been bound.",
-            "The Wizard has Succeeded"
+            "The Wizard has Succeeded",
         );
     }
 }
