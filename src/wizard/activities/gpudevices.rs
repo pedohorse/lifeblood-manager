@@ -53,7 +53,9 @@ impl WizardActivityTrait for GpuDevicesActivity {
             );
         layout.end();
         main_layout.fixed(&layout, 128);
-        let scroll_group = Scroll::default().with_size(self.contents_size().0, 256).with_type(ScrollType::Vertical);
+        let scroll_group = Scroll::default()
+            .with_size(self.contents_size().0, 256)
+            .with_type(ScrollType::Vertical);
         //let scroll_inner = Flex::default_fill().column();
         Frame::default().with_size(self.contents_size().0, 500)
             .with_align(Align::Inside | Align::Left)
@@ -186,6 +188,18 @@ redshift_dev - this tag represents the GPU's device number as recognized by Reds
                 }
             });
 
+            // defaults
+            tags_number_spinner.set_value(3.0);
+            gpu_tags[0].0.show();
+            gpu_tags[1].0.show();
+            gpu_tags[2].0.show();
+            gpu_tags[0].1.set_value("houdini_ocl");
+            gpu_tags[0].2.set_value(&format!("GPU::{gpu_i}"));
+            gpu_tags[1].1.set_value("karma_dev");
+            gpu_tags[1].2.set_value(&format!("{}/{}", gpu_i, gpu_i + 1)); // TODO: note, this is not a good default for multi GPU setups
+            gpu_tags[2].1.set_value("redshift_dev");
+            gpu_tags[2].2.set_value(&format!("{gpu_i}"));
+
             user_inputs.push((
                 block_layout,
                 gpu_name,
@@ -230,7 +244,29 @@ redshift_dev - this tag represents the GPU's device number as recognized by Reds
             move |w| {
                 let number_of_versions = w.value() as usize;
                 for i in 0..number_of_versions {
-                    widgets.borrow_mut()[i].0.show();
+                    let mut widgets = widgets.borrow_mut();
+                    widgets[i].0.show();
+
+                    // this is the special convenience case for karma_dev tag
+                    for (_, tagname_input, tagval_input) in widgets[i].6.iter_mut() {
+                        if tagname_input.value() != "karma_dev" {
+                            continue;
+                        }
+                        let tagval = tagval_input.value();
+                        if let Some(idx) = tagval.find('/') {
+                            let (dnum, dtot) = tagval.split_at(idx);
+                            match (
+                                u64::from_str_radix(dnum, 10),
+                                u64::from_str_radix(&dtot[1..], 10),
+                            ) {
+                                (Ok(num), Ok(_)) => {
+                                    tagval_input
+                                        .set_value(&format!("{}/{}", num, number_of_versions));
+                                }
+                                _ => (), // do nothing in case value is not standard
+                            }
+                        }
+                    } // end of special karma_dev case
                 }
                 for i in number_of_versions..MAX_GPUS_COUNT {
                     widgets.borrow_mut()[i].0.hide();
@@ -246,7 +282,9 @@ redshift_dev - this tag represents the GPU's device number as recognized by Reds
 
     fn validate(&self) -> Result<(), &str> {
         if let Some(widgets) = &self.widgets {
-            for (layout, name_input, mem_input, ocl_input, cuda_input, _, tags_inputs) in widgets.borrow().iter() {
+            for (layout, name_input, mem_input, ocl_input, cuda_input, _, tags_inputs) in
+                widgets.borrow().iter()
+            {
                 if !layout.visible() {
                     break;
                 }
@@ -268,7 +306,7 @@ redshift_dev - this tag represents the GPU's device number as recognized by Reds
                     Ok(x) if x < 0_f64 => return Err("CUDA CC cannot be negative"),
                     Ok(_) => (),
                 }
-                for (tag_layout, tag_name, _)  in tags_inputs.iter() {
+                for (tag_layout, tag_name, _) in tags_inputs.iter() {
                     if !tag_layout.visible() {
                         break;
                     }
