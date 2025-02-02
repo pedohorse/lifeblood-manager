@@ -52,7 +52,7 @@ impl WizardDataSerialization for WizardData {
                 toml::Value::String(path.to_string_lossy().to_string()),
             );
             conf_sched.insert("globals".to_string(), toml::Value::Table(conf_globals));
-            conf.insert("scheduler".to_string(), toml::Value::Table(conf_sched));
+            conf.insert("nodes".to_string(), toml::Value::Table(conf_sched));
 
             let mut text = match toml::to_string_pretty(&conf) {
                 Ok(x) => x,
@@ -78,37 +78,79 @@ impl WizardDataSerialization for WizardData {
         let mut conf_packages = HashMap::new();
 
         macro_rules! process_simple_package {
-            ($dcc_versions:expr, $pname:literal, $plabel:literal) => {
-                {
-                    let mut conf_dcc_vers = HashMap::new();
-                    for ver in $dcc_versions.iter() {
-                        conf_dcc_vers.insert(
-                            format!("{}.{}.{}", ver.version.0, ver.version.1, ver.version.2),
-                            Package {
-                                label: Some($plabel.to_owned()),
-                                env: Some(HashMap::from([(
-                                    "PATH".to_owned(),
-                                    EnvAction {
-                                        append: None,
-                                        prepend: Some(StringOrList::String(
-                                            ver.bin_path.to_string_lossy().to_string(),
-                                        )),
-                                        set: None,
-                                    },
-                                )])),
-                            },
-                        );
-                    } 
-                    if conf_dcc_vers.len() > 0 {
-                        conf_packages.insert($pname.to_owned(), conf_dcc_vers);
-                    };
+            ($dcc_versions:expr, $pname:literal, $plabel:literal) => {{
+                let mut conf_dcc_vers = HashMap::new();
+                for ver in $dcc_versions.iter() {
+                    conf_dcc_vers.insert(
+                        format!("{}.{}.{}", ver.version.0, ver.version.1, ver.version.2),
+                        Package {
+                            label: Some($plabel.to_owned()),
+                            env: Some(HashMap::from([(
+                                "PATH".to_owned(),
+                                EnvAction {
+                                    append: None,
+                                    prepend: Some(StringOrList::String(
+                                        ver.bin_path.to_string_lossy().to_string(),
+                                    )),
+                                    set: None,
+                                },
+                            )])),
+                        },
+                    );
                 }
-            };
+                if conf_dcc_vers.len() > 0 {
+                    conf_packages.insert($pname.to_owned(), conf_dcc_vers);
+                };
+            }};
         }
 
         //
         process_simple_package!(self.blender_versions, "blender", "Blender");
-        process_simple_package!(self.redshift_versions, "redshift", "Redshift");
+
+        //
+        // Redshift
+        {
+            let mut conf_dcc_vers = HashMap::new();
+            for ver in self.redshift_versions.iter() {
+                conf_dcc_vers.insert(
+                    format!("{}.{}.{}", ver.version.0, ver.version.1, ver.version.2),
+                    Package {
+                        label: Some("Redshift".to_owned()),
+                        env: Some(HashMap::from([
+                            (
+                                "PATH".to_owned(),
+                                EnvAction {
+                                    append: None,
+                                    prepend: Some(StringOrList::String(
+                                        ver.bin_path.to_string_lossy().to_string(),
+                                    )),
+                                    set: None,
+                                },
+                            ),
+                            (
+                                // Note, we ASSUME bin is always right under REDSHIFT_COREDATAPATH, but who knows!
+                                "REDSHIFT_COREDATAPATH".to_owned(),
+                                EnvAction {
+                                    append: None,
+                                    prepend: None,
+                                    set: Some(
+                                        ver.bin_path
+                                            .parent()
+                                            .unwrap_or(&ver.bin_path)
+                                            .to_string_lossy()
+                                            .to_string(),
+                                    ),
+                                },
+                            ),
+                        ])),
+                    },
+                );
+            }
+            if conf_dcc_vers.len() > 0 {
+                conf_packages.insert("redshift".to_owned(), conf_dcc_vers);
+            };
+        }
+        //
 
         //
         // houdini
@@ -185,11 +227,13 @@ impl WizardDataSerialization for WizardData {
 
             let mut worker_config = config_collection.get_config_data("worker");
             match toml::to_string_pretty(&gpu_data) {
-                Ok(text) => match worker_config.set_additional_config_text(device_config_d_name, &text) {
-                    Err(ConfigWritingError::IoError(e)) => return Err(e),
-                    Err(e) => return Err(Error::new(io::ErrorKind::Other, format!("{:?}", e))),
-                    Ok(_) => (),
-                },
+                Ok(text) => {
+                    match worker_config.set_additional_config_text(device_config_d_name, &text) {
+                        Err(ConfigWritingError::IoError(e)) => return Err(e),
+                        Err(e) => return Err(Error::new(io::ErrorKind::Other, format!("{:?}", e))),
+                        Ok(_) => (),
+                    }
+                }
                 Err(_) => panic!("unexpected internal error!"),
             }
         } else {
