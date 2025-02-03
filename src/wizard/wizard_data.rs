@@ -57,4 +57,17 @@ impl WizardData {
             gpu_devs: Vec::new(),
         }
     }
+
+    /// unlike new, this one also fills some
+    /// common reasonable defaults
+    pub fn new_with_reasonable_defaults() -> Self {
+        let mut wizard_data = WizardData::new();
+        // set some usual defaults for GPU
+        wizard_data.gpu_devs.push(("".to_owned(), 0, 3.0, 7.0, vec![
+            ("houdini_ocl".to_owned(), "GPU::0".to_owned()),
+            ("karma_dev".to_owned(), "0/1".to_owned()),
+            ("redshift_dev".to_owned(), "0".to_owned()),
+        ]));
+        wizard_data
+    }
 }

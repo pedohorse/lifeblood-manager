@@ -55,7 +55,8 @@ impl WizardDataFromConfig for WizardData {
                     return Err(err);
                 }
             };
-            if let Some(config_sched) = config.get("scheduler") {
+            // NOTE: [scheduler.globals] is deprecated, [nodes.globals] is the new shit
+            if let Some(config_sched) = config.get("nodes").or(config.get("scheduler")) {
                 if let Some(config_globals) = config_sched.get("globals") {
                     if let Some(toml::Value::String(s)) =
                         config_globals.get("global_scratch_location")
@@ -106,14 +107,7 @@ impl WizardDataFromConfig for WizardData {
                     gpu_data.tags.into_iter().collect(),
                 ))
             }
-        } else {
-            // set some usual defaults
-            wizard_data.gpu_devs.push(("".to_owned(), 0, 3.0, 7.0, vec![
-                ("houdini_ocl".to_owned(), "GPU::0".to_owned()),
-                ("karma_dev".to_owned(), "0/1".to_owned()),
-                ("redshift_dev".to_owned(), "0".to_owned()),
-            ]));
-        };
+        }
 
         //
         // packages

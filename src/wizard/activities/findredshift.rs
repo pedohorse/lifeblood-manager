@@ -43,7 +43,13 @@ impl WizardActivityTrait for FindRedshiftActivity {
             .with_align(Align::Inside | Align::Left)
             .with_label(
                 "\
-        TBD
+        Show me the location where Redshift's binaries are located\n\
+        It's expected to be something/something/bin\n\
+        where something/something will be treated as REDSHIFT_COREDATAPATH\n\
+        \n\
+        As for version - you must specify the proper redshift version, NOT houdini version or anything\n\
+        You can get the exact version by running redshiftCmdLine binary without arguments in a console\n\
+        The version will be written in the first line of the output
         ",
             );
         layout.end();

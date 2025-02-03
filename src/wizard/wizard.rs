@@ -35,7 +35,7 @@ enum WizardState {
 impl Wizard {
     pub fn new(config_root: PathBuf) -> Self {
         Wizard {
-            data: WizardData::new_from_config(&config_root).unwrap_or_else(|_| WizardData::new()),
+            data: WizardData::new_from_config(&config_root).unwrap_or_else(|_| WizardData::new_with_reasonable_defaults()),
             config_root,
             state: WizardState::Intro,
         }
@@ -303,6 +303,7 @@ impl Wizard {
                             .iter()
                             .map(|x| x as &Path)
                             .collect::<Vec<_>>(),
+                        &self.data.redshift_versions,
                         &self.data.gpu_devs,
                     );
                     match runner.process(&mut activity) {
