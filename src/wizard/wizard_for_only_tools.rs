@@ -71,7 +71,8 @@ impl WizardForToolsOnly {
                             .iter()
                             .map(|x| x as &Path)
                             .collect::<Vec<_>>(),
-                            &[],
+                        &self.data.redshift_versions,
+                        &[],
                     );
                     match runner.process(&mut activity) {
                         ActivityResult::Next => {

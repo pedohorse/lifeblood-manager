@@ -1,3 +1,5 @@
+use crate::wizard::wizard_data::RedshiftVersion;
+
 use super::super::wizard_activity::WizardActivityTrait;
 use super::super::wizard_data::{BlenderVersion, HoudiniVersion};
 use fltk::misc::HelpView;
@@ -31,6 +33,7 @@ impl SummaryActivity {
         blender_vers: &[BlenderVersion],
         houdini_vers: &[HoudiniVersion],
         houdini_tools_paths: &[&Path],
+        redshift_vers: &[RedshiftVersion],
         gpu_devices: &[(String, u32, f64, f64, Vec<(String, String)>)],
     ) -> Self {
         // blender text
@@ -96,6 +99,30 @@ impl SummaryActivity {
             "<br>No Lifeblood submitting tools for Houdini will be installed".to_owned()
         };
 
+        // redshift text
+        let redshift_ver_text = if redshift_vers.len() > 0 {
+            let mut text = format!(
+                "\
+                <h3>Redshift Versions:</h3>\
+                <ul>\
+                \
+            "
+            );
+            for ver in redshift_vers.iter() {
+                text.push_str(&format!(
+                    "<li>redshift [{}.{}.{}]: {:?}",
+                    ver.version.0,
+                    ver.version.1,
+                    ver.version.2,
+                    &ver.bin_path
+                ));
+            }
+            text.push_str("</ul>");
+            text
+        } else {
+            "<h4>No Redshift versions</h4>".to_owned()
+        };
+
         // gpu devices
         let gpu_summary = if gpu_devices.len() > 0 {
             let mut text = format!(
@@ -133,6 +160,7 @@ impl SummaryActivity {
             {}\n\
             {}\n\
             {}\n\
+            {}\n\
             ",
             if let Some(path) = db_path {
                 path.to_str().unwrap_or("<display error>")
@@ -146,6 +174,7 @@ impl SummaryActivity {
             },
             blender_ver_text,
             houini_ver_text,
+            redshift_ver_text,
             gpu_summary,
         );
 

@@ -303,6 +303,7 @@ impl Wizard {
                             .iter()
                             .map(|x| x as &Path)
                             .collect::<Vec<_>>(),
+                        &self.data.redshift_versions,
                         &self.data.gpu_devs,
                     );
                     match runner.process(&mut activity) {
