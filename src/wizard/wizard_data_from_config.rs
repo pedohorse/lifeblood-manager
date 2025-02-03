@@ -55,7 +55,8 @@ impl WizardDataFromConfig for WizardData {
                     return Err(err);
                 }
             };
-            if let Some(config_sched) = config.get("scheduler") {
+            // NOTE: [scheduler.globals] is deprecated, [nodes.globals] is the new shit
+            if let Some(config_sched) = config.get("nodes").or(config.get("scheduler")) {
                 if let Some(config_globals) = config_sched.get("globals") {
                     if let Some(toml::Value::String(s)) =
                         config_globals.get("global_scratch_location")
