@@ -24,3 +24,9 @@ Easily try newest version, and easily fall back to the previous one if things go
 
 This repository also provides a script to automate installation of lifeblood as systemd service,
 check [systemd-service](systemd-service) directory for more information
+
+## Links
+
+- [blog + support](https://www.patreon.com/xapkohheh)
+- [telegram support/discussion group](https://t.me/+v9klFGZcKVY2MjYy)
+- [documentation](https://pedohorse.github.io/lifeblood)
